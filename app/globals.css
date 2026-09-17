@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  --bg: oklch(98% 0.008 85);
+  --surface: #ffffff;
+  --text: oklch(22% 0.02 80);
+  --muted: oklch(50% 0.02 80);
+  --border: oklch(90% 0.01 85);
+
+  --accent: oklch(48% 0.1 175);
+  --accent-strong: oklch(52% 0.09 175);
+  --accent-soft: oklch(93% 0.03 175);
+
+  --amber: oklch(58% 0.13 55);
+  --amber-soft: oklch(94% 0.06 55);
+
+  --success: oklch(45% 0.09 150);
+  --success-soft: oklch(92% 0.05 150);
+
+  --danger: oklch(48% 0.16 25);
+  --danger-soft: oklch(93% 0.06 25);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Karla", system-ui, -apple-system, sans-serif;
+}
+
+.font-display {
+  font-family: "Nunito", system-ui, sans-serif;
+}
+
+/* Printing: documents meant to be signed on paper (the Attendant
+   Orientation form) should print as the document alone — no app chrome,
+   no navigation, no in-app action forms. Anything marked .no-print is
+   screen-only. */
+@media print {
+  .no-print,
+  nav,
+  aside {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+}

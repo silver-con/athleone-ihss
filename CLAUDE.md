@@ -1,0 +1,3 @@
+@AGENTS.md
+@docs/TROUBLESHOOTING.md
+@docs/GRC-AGENT.md
