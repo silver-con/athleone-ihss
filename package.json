@@ -7,9 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:setup": "psql \"$DATABASE_URL\" -f db/schema.sql",
+    "db:setup": "node --env-file=.env scripts/db-setup.mjs",
     "db:seed": "node --env-file=.env scripts/seed.mjs",
-    "mock:evv": "node mocks/hhaexchange-mock.mjs"
+    "mock:evv": "node mocks/hhaexchange-mock.mjs",
+    "db:check": "node --env-file=.env scripts/check-schema.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

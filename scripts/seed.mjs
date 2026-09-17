@@ -39,19 +39,30 @@ async function main() {
     await client.query('BEGIN');
 
     console.log('Clearing existing data…');
+    // Deliberately NOT truncating `organizations` here (see
+    // docs/TROUBLESHOOTING.md, 2026-09-17: "npm run db:seed silently wipes
+    // DocuSign/EVV credentials"). organization_docusign_credentials and
+    // organization_evv_credentials both have organization_id as a foreign
+    // key to organizations with ON DELETE CASCADE — truncating
+    // `organizations` cascades into wiping those too, even though neither
+    // is named below, silently disconnecting DocuSign/EVV on every reseed.
+    // Organizations are upserted instead (see below) so reseeding refreshes
+    // demo data without nuking admin-entered per-tenant settings.
     await client.query(
       `TRUNCATE users, messages, billing_lines, service_authorizations, caregiver_orientations,
                 training_completions, training_courses, caregiver_checks, caregiver_documents,
-                visits, clients, referrals, caregivers, organizations RESTART IDENTITY CASCADE`
+                visits, clients, referrals, caregivers RESTART IDENTITY CASCADE`
     );
 
     console.log('Seeding organizations…');
     await client.query(
-      `INSERT INTO organizations (id, name, status) VALUES ($1, $2, 'active')`,
+      `INSERT INTO organizations (id, name, status) VALUES ($1, $2, 'active')
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, status = EXCLUDED.status`,
       [ORG_PRIMARY, 'Hearth Home Care (Demo)']
     );
     await client.query(
-      `INSERT INTO organizations (id, name, status) VALUES ($1, $2, 'trial')`,
+      `INSERT INTO organizations (id, name, status) VALUES ($1, $2, 'trial')
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, status = EXCLUDED.status`,
       [ORG_SECONDARY, 'Second Agency (Isolation Check)']
     );
 
