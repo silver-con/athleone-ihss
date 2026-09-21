@@ -73,7 +73,9 @@ export default async function AdminCaregiversPage() {
     <div>
       <h1 className="font-display font-extrabold text-[24px]">Caregivers</h1>
       <p className="text-[13.5px] text-[var(--muted)] mt-1">
-        Agency roster — caseload, credentialing status and onboarding training
+        {session.locationId
+          ? `Roster at ${locationById[session.locationId]?.name || 'your location'} — caseload, credentialing status and onboarding training`
+          : 'Agency roster — caseload, credentialing status and onboarding training'}
       </p>
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden mt-6">

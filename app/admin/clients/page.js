@@ -21,7 +21,9 @@ export default async function AdminClientsPage() {
     <div>
       <h1 className="font-display font-extrabold text-[24px]">Clients</h1>
       <p className="text-[13.5px] text-[var(--muted)] mt-1">
-        Agency-wide active clients with completed intake — assign or reassign caregivers
+        {session.locationId
+          ? `Active clients with completed intake at ${locationById[session.locationId]?.name || 'your location'}`
+          : 'Agency-wide active clients with completed intake — assign or reassign caregivers'}
       </p>
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden mt-6">

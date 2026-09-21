@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/session';
-import { ROUTE_PERMISSIONS, PERMISSIONS } from '@/lib/permissions';
+import { ROUTE_PERMISSIONS, PERMISSIONS, ROLE_HOME } from '@/lib/permissions';
 
 // Which top-level sections require a session at all. Anything not matched
 // here (the landing page, /login, /signup, static assets) is public. This
@@ -38,15 +38,11 @@ export async function proxy(request) {
   if (!allowed) {
     // Signed in, but this account's role doesn't hold the permission this
     // route needs — send them to the home base for their own role instead
-    // of a raw 403.
-    const home =
-      session.role === 'ADMIN'
-        ? '/admin'
-        : session.role === 'CAREGIVER'
-        ? '/caregiver'
-        : session.role === 'PLATFORM_ADMIN'
-        ? '/platform'
-        : '/referrals';
+    // of a raw 403. Same ROLE_HOME map actions/auth.js uses after login —
+    // this used to be its own inline copy that never learned about
+    // LOCATION_ADMIN, so that role fell through to '/referrals' instead
+    // of its actual home.
+    const home = ROLE_HOME[session.role] || '/referrals';
     return NextResponse.redirect(new URL(home, request.url));
   }
 

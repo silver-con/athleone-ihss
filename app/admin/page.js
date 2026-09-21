@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { getReferrals, getClients, getCaregivers, getVisits } from '@/lib/queries';
+import { getReferrals, getClients, getCaregivers, getVisits, getLocation } from '@/lib/queries';
 import StatTile from '@/components/StatTile';
 import BarChart from '@/components/charts/BarChart';
 import StatusBar from '@/components/charts/StatusBar';
@@ -24,11 +24,12 @@ export default async function AdminOverviewPage() {
   // free. The org admin's own "full view of all locations" requirement is
   // exactly what a null locationId already gives — see getLocationRevenueSummary
   // in lib/queries.js for the cross-location rollup this page links to.
-  const [referrals, clients, caregivers, visits] = await Promise.all([
+  const [referrals, clients, caregivers, visits, scopedLocation] = await Promise.all([
     getReferrals(session.organizationId),
     getClients(session.organizationId, session.locationId),
     getCaregivers(session.organizationId, session.locationId),
     getVisits(session.organizationId, session.locationId),
+    session.locationId ? getLocation(session.organizationId, session.locationId) : null,
   ]);
 
   const openReferrals = referrals.filter((r) => r.status !== 'completed').length;
@@ -63,9 +64,13 @@ export default async function AdminOverviewPage() {
 
   return (
     <div>
-      <h1 className="font-display font-extrabold text-[24px]">Admin Dashboard</h1>
+      <h1 className="font-display font-extrabold text-[24px]">
+        {scopedLocation ? `${scopedLocation.name} Dashboard` : 'Admin Dashboard'}
+      </h1>
       <p className="text-[13.5px] text-[var(--muted)] mt-1">
-        Agency-wide overview across referrals, caregivers and active clients
+        {scopedLocation
+          ? `Caregivers and clients at ${scopedLocation.name} — referrals below are the organization\u2019s shared intake queue`
+          : 'Agency-wide overview across referrals, caregivers and active clients'}
       </p>
 
       <div className="flex flex-wrap gap-3 mt-6">

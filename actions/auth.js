@@ -4,18 +4,7 @@ import { redirect } from 'next/navigation';
 import { queryOne } from '@/lib/db';
 import { getPlatformAdminByEmail } from '@/lib/queries';
 import { verifyPassword, setSessionCookie, clearSessionCookie, getSession } from '@/lib/auth';
-import { PERMISSIONS } from '@/lib/permissions';
-
-const ROLE_HOME = {
-  ADMIN: '/admin',
-  // A location admin lands on the same dashboard as the org admin — the
-  // pages are shared and every query narrows on session.locationId, so
-  // they simply see their own location's slice of it.
-  LOCATION_ADMIN: '/admin',
-  COORDINATOR: '/referrals',
-  CAREGIVER: '/caregiver',
-  PLATFORM_ADMIN: '/platform',
-};
+import { PERMISSIONS, ROLE_HOME } from '@/lib/permissions';
 
 export async function loginAction(prevState, formData) {
   const email = String(formData.get('email') || '').trim().toLowerCase();
