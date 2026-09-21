@@ -30,9 +30,9 @@ export default async function CompliancePage() {
   const session = await getSession();
   if (!session) redirect('/login');
   const [visits, clients, caregivers] = await Promise.all([
-    getVisits(session.organizationId),
-    getClients(session.organizationId),
-    getCaregivers(session.organizationId),
+    getVisits(session.organizationId, session.locationId),
+    getClients(session.organizationId, session.locationId),
+    getCaregivers(session.organizationId, session.locationId),
   ]);
 
   const currentQuarter = evvUsageHistory[evvUsageHistory.length - 1];

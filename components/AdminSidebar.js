@@ -2,11 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { hasPermission } from '@/lib/permissions';
 
 const NAV_ITEMS = [
   {
     href: '/admin',
     label: 'Overview',
+    permission: 'admin.dashboard.view',
     match: (path) => path === '/admin',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -18,8 +20,47 @@ const NAV_ITEMS = [
     ),
   },
   {
+    href: '/admin/onboarding',
+    label: 'Setup & Go-Live',
+    permission: 'admin.onboarding.view',
+    match: (path) => path.startsWith('/admin/onboarding'),
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3.5" y="3.5" width="17" height="17" rx="2.5" />
+        <path d="M7.5 12.5l3 3 6-6.5" />
+      </svg>
+    ),
+  },
+  {
+    href: '/admin/locations',
+    label: 'Locations',
+    permission: 'admin.locations.view',
+    match: (path) => path.startsWith('/admin/locations'),
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 21s-6.5-5.8-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.2-6.5 11-6.5 11Z" />
+        <circle cx="12" cy="10" r="2.4" />
+      </svg>
+    ),
+  },
+  {
+    href: '/admin/team',
+    label: 'Team',
+    permission: 'admin.team.view',
+    match: (path) => path.startsWith('/admin/team'),
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="9" cy="8.5" r="3.1" />
+        <path d="M3.5 20c0-3.1 2.5-5.4 5.5-5.4s5.5 2.3 5.5 5.4" />
+        <path d="M16.5 6.2a3 3 0 0 1 0 5.9" />
+        <path d="M18 20c0-2-.6-3.5-1.7-4.6" />
+      </svg>
+    ),
+  },
+  {
     href: '/admin/caregivers',
     label: 'Caregivers',
+    permission: 'admin.caregivers.list.view',
     match: (path) => path.startsWith('/admin/caregivers'),
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -31,6 +72,7 @@ const NAV_ITEMS = [
   {
     href: '/admin/clients',
     label: 'Clients',
+    permission: 'admin.clients.list.view',
     match: (path) => path.startsWith('/admin/clients'),
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -44,6 +86,7 @@ const NAV_ITEMS = [
   {
     href: '/admin/training',
     label: 'Training',
+    permission: 'admin.training.view',
     match: (path) => path.startsWith('/admin/training'),
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -56,6 +99,7 @@ const NAV_ITEMS = [
   {
     href: '/admin/care-plans',
     label: 'Care Plans',
+    permission: 'admin.carePlans.view',
     match: (path) => path.startsWith('/admin/care-plans') || path.match(/^\/admin\/clients\/[^/]+\/care-plan/),
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -68,6 +112,7 @@ const NAV_ITEMS = [
   {
     href: '/admin/schedule',
     label: 'Schedule',
+    permission: 'admin.schedule.view',
     match: (path) => path.startsWith('/admin/schedule'),
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -80,6 +125,7 @@ const NAV_ITEMS = [
   {
     href: '/admin/finance',
     label: 'Finance',
+    permission: 'admin.finance.view',
     match: (path) => path.startsWith('/admin/finance'),
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -92,6 +138,7 @@ const NAV_ITEMS = [
   {
     href: '/admin/evv',
     label: 'EVV Compliance',
+    permission: 'admin.evv.dashboard.view',
     match: (path) => path.startsWith('/admin/evv'),
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -103,6 +150,7 @@ const NAV_ITEMS = [
   {
     href: '/admin/compliance',
     label: 'TX Compliance Center',
+    permission: 'admin.compliance.view',
     match: (path) => path.startsWith('/admin/compliance'),
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -116,6 +164,7 @@ const NAV_ITEMS = [
   {
     href: '/admin/esign',
     label: 'E-Signature',
+    permission: 'admin.esign.view',
     match: (path) => path.startsWith('/admin/esign'),
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -126,8 +175,15 @@ const NAV_ITEMS = [
   },
 ];
 
-export default function AdminSidebar() {
+// `role` comes from the server layout — this is a client component, so it
+// cannot read the session itself. Items whose guarding permission the role
+// does not hold are not rendered at all; proxy.js still enforces the same
+// catalog server-side, so this is presentation, never the access boundary.
+export default function AdminSidebar({ role }) {
   const pathname = usePathname();
+  const navItems = NAV_ITEMS.filter(
+    (item) => !item.permission || !role || hasPermission(role, item.permission)
+  );
 
   return (
     <div className="no-print w-60 shrink-0 bg-[var(--surface)] border-r border-[var(--border)] flex flex-col p-4">
@@ -141,10 +197,10 @@ export default function AdminSidebar() {
         <div className="font-display font-extrabold text-[17px]">Hearth</div>
       </Link>
       <div className="px-1.5 pb-5 text-[11px] font-display font-bold uppercase tracking-wide text-[var(--muted)]">
-        Admin
+        {role === 'LOCATION_ADMIN' ? 'Location' : 'Admin'}
       </div>
 
-      {NAV_ITEMS.map((item) => {
+      {navItems.map((item) => {
         const active = item.match(pathname);
         return (
           <Link

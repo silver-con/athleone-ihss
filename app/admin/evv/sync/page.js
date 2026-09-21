@@ -21,8 +21,8 @@ export default async function EvvSyncPage() {
 
   const [credentials, log, visits] = await Promise.all([
     getEvvCredentials(session.organizationId),
-    getSyncLog(session.organizationId),
-    getVisits(session.organizationId),
+    getSyncLog(session.organizationId, 100, session.locationId),
+    getVisits(session.organizationId, session.locationId),
   ]);
 
   const count = (s) => log.filter((r) => r.status === s).length;

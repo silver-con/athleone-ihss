@@ -7,9 +7,9 @@ export default async function SchedulePage() {
   const session = await getSession();
   if (!session) redirect('/login');
   const [caregivers, clients, allVisits] = await Promise.all([
-    getCaregivers(session.organizationId),
-    getClients(session.organizationId),
-    getVisits(session.organizationId),
+    getCaregivers(session.organizationId, session.locationId),
+    getClients(session.organizationId, session.locationId),
+    getVisits(session.organizationId, session.locationId),
   ]);
   // This page is the current week's grid — backlog visits (`day: null`)
   // belong to the Compliance Center's maintenance queue instead.

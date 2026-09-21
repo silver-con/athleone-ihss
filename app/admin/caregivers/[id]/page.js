@@ -51,7 +51,7 @@ export default async function CaregiverRecordPage({ params }) {
   if (!session) redirect('/login');
 
   const { id } = await params;
-  const caregiver = await getCaregiver(session.organizationId, id);
+  const caregiver = await getCaregiver(session.organizationId, id, session.locationId);
 
   if (!caregiver) {
     return (
@@ -69,7 +69,7 @@ export default async function CaregiverRecordPage({ params }) {
     getLatestChecks(session.organizationId, id),
     getCourses(session.organizationId),
     getCompletionsForCaregiver(session.organizationId, id),
-    getClients(session.organizationId),
+    getClients(session.organizationId, session.locationId),
     getOnboardingState(session.organizationId, id),
   ]);
 

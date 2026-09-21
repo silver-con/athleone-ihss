@@ -3,7 +3,7 @@
 import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { requireSession } from '@/actions/auth';
+import { requirePermission } from '@/actions/auth';
 import * as db from '@/lib/queries';
 import { encryptSecret } from '@/lib/secrets';
 import {
@@ -26,7 +26,7 @@ async function baseUrl() {
 // blank — same pattern as the EVV credentials form, since the key can't be
 // read back once encrypted.
 export async function saveDocusignCredentialsAction(prevState, formData) {
-  const session = await requireSession(['ADMIN']);
+  const session = await requirePermission('admin.esign.manage');
   const existing = await db.getDocusignCredentials(session.organizationId);
 
   const integrationKey = String(formData.get('integrationKey') || '').trim();
@@ -64,7 +64,7 @@ export async function saveDocusignCredentialsAction(prevState, formData) {
 }
 
 export async function testDocusignConnectionAction() {
-  const session = await requireSession(['ADMIN']);
+  const session = await requirePermission('admin.esign.manage');
   const credentials = await db.getDocusignCredentials(session.organizationId);
   if (!credentials) return { ok: false, error: 'No credentials saved yet.' };
 
@@ -80,7 +80,7 @@ export async function testDocusignConnectionAction() {
 // sends the caregiver's own browser into DocuSign's embedded signing view.
 // DocuSign redirects back to the route handler below when they're done.
 export async function startPacketSigningAction() {
-  const session = await requireSession(['CAREGIVER']);
+  const session = await requirePermission('caregiver.onboarding.sign');
   if (!session.caregiverId) redirect('/caregiver/onboarding');
 
   const credentials = await db.getDocusignCredentials(session.organizationId);
@@ -136,7 +136,7 @@ export async function startPacketSigningAction() {
 // baa_on_file is true — this document carries client PHI (name, HHSC
 // individual number), and DocuSign only covers that under a signed BAA.
 export async function startOrientationSigningAction(orientationId, formData) {
-  const session = await requireSession(['ADMIN', 'COORDINATOR']);
+  const session = await requirePermission('admin.orientations.manage');
 
   const credentials = await db.getDocusignCredentials(session.organizationId);
   if (!credentials || credentials.status !== 'connected') {
@@ -202,7 +202,7 @@ export async function startOrientationSigningAction(orientationId, formData) {
 // signed — polling rather than a webhook, same tradeoff made for EVV sync
 // (no publicly reachable endpoint assumed for a dev-environment install).
 export async function checkOrientationSigningStatusAction(orientationId) {
-  const session = await requireSession(['ADMIN', 'COORDINATOR']);
+  const session = await requirePermission('admin.orientations.manage');
   const orientation = await db.getOrientation(session.organizationId, orientationId);
   if (!orientation?.envelopeId) return { error: 'No envelope on file for this orientation.' };
 

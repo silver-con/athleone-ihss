@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireSession } from '@/actions/auth';
+import { requirePermission } from '@/actions/auth';
 import * as db from '@/lib/queries';
 
 // Texas requires the DPS criminal history, EMR and NAR checks before hire
@@ -16,7 +16,7 @@ function oneYearAfter(dateStr) {
 }
 
 export async function recordCheckAction(formData) {
-  const session = await requireSession(['ADMIN', 'COORDINATOR']);
+  const session = await requirePermission('admin.caregiverHr.manage');
   const caregiverId = String(formData.get('caregiverId') || '').trim();
   const completedOn = String(formData.get('completedOn') || '').trim();
   if (!caregiverId || !completedOn) return;
@@ -37,7 +37,7 @@ export async function recordCheckAction(formData) {
 }
 
 export async function updateDocumentAction(formData) {
-  const session = await requireSession(['ADMIN', 'COORDINATOR']);
+  const session = await requirePermission('admin.caregiverHr.manage');
   const caregiverId = String(formData.get('caregiverId') || '').trim();
   const docType = String(formData.get('docType') || '').trim();
   if (!caregiverId || !docType) return;
@@ -55,7 +55,7 @@ export async function updateDocumentAction(formData) {
 }
 
 export async function setCaregiverStatusAction(caregiverId, status) {
-  const session = await requireSession(['ADMIN']);
+  const session = await requirePermission('admin.caregiverHr.statusOverride');
   await db.setCaregiverStatus(session.organizationId, caregiverId, status);
   revalidatePath(`/admin/caregivers/${caregiverId}`);
   revalidatePath('/admin/caregivers');

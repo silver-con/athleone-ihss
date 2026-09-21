@@ -17,11 +17,18 @@ const STATUS_FILL = {
 export default async function AdminOverviewPage() {
   const session = await getSession();
   if (!session) redirect('/login');
+  // session.locationId is null for every ADMIN account today (no UI yet
+  // creates a location-scoped one — see app/admin/locations/page.js), so
+  // this is currently a no-op; threading it through now means a future
+  // location-scoped manager role gets a correctly filtered dashboard for
+  // free. The org admin's own "full view of all locations" requirement is
+  // exactly what a null locationId already gives — see getLocationRevenueSummary
+  // in lib/queries.js for the cross-location rollup this page links to.
   const [referrals, clients, caregivers, visits] = await Promise.all([
     getReferrals(session.organizationId),
-    getClients(session.organizationId),
-    getCaregivers(session.organizationId),
-    getVisits(session.organizationId),
+    getClients(session.organizationId, session.locationId),
+    getCaregivers(session.organizationId, session.locationId),
+    getVisits(session.organizationId, session.locationId),
   ]);
 
   const openReferrals = referrals.filter((r) => r.status !== 'completed').length;

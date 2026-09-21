@@ -70,7 +70,7 @@ export default async function OrientationDocumentPage({ params }) {
   }
 
   const [client, caregiver, organization, authorization, visits, docusignCredentials] = await Promise.all([
-    getClient(session.organizationId, orientation.clientId),
+    getClient(session.organizationId, orientation.clientId, session.locationId),
     getCaregiver(session.organizationId, orientation.caregiverId),
     getOrganization(session.organizationId),
     getActiveAuthorization(session.organizationId, orientation.clientId),

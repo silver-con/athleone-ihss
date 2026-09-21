@@ -28,7 +28,7 @@ export default async function ClientCarePlanPage({ params }) {
 
   const { id } = await params;
   const [client, authorizations, orientations] = await Promise.all([
-    getClient(session.organizationId, id),
+    getClient(session.organizationId, id, session.locationId),
     getServiceAuthorizations(session.organizationId, id),
     getOrientationsForClient(session.organizationId, id),
   ]);
@@ -101,6 +101,10 @@ export default async function ClientCarePlanPage({ params }) {
                   : null
               )}
               {fieldRow('Hours / week', auth.totalHoursPerWeek)}
+              {fieldRow(
+                'Rate / unit',
+                auth.ratePerUnit != null ? `$${auth.ratePerUnit.toFixed(2)}` : null
+              )}
               {fieldRow('Effective', `${auth.startDate} – ${auth.endDate}`)}
               {fieldRow('Diagnosis', auth.diagnosisCode ? `${auth.diagnosisCode} — ${auth.diagnosisDescription || ''}` : null)}
             </div>
@@ -238,6 +242,14 @@ export default async function ClientCarePlanPage({ params }) {
           <label className="flex flex-col gap-1.5 text-[12.5px] font-display font-bold">
             Unit length (minutes)
             <input name="unitMinutes" type="number" defaultValue={15} className="border border-[var(--border)] rounded-lg px-3 py-2 text-[13px] font-body font-normal" />
+          </label>
+          <label className="flex flex-col gap-1.5 text-[12.5px] font-display font-bold">
+            Rate per unit ($)
+            <input name="ratePerUnit" type="number" step="0.01" min="0" placeholder="25.00" className="border border-[var(--border)] rounded-lg px-3 py-2 text-[13px] font-body font-normal" />
+            <span className="text-[11px] font-body font-normal text-[var(--muted)]">
+              Drives billed revenue and franchise commission. Leave blank if the payer rate
+              isn&rsquo;t confirmed — lines then show as unrated rather than $0.
+            </span>
           </label>
 
           <label className="flex flex-col gap-1.5 text-[12.5px] font-display font-bold">

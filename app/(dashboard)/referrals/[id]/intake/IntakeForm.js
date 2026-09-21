@@ -6,7 +6,7 @@ import { submitIntakeAction } from '@/actions/referrals';
 
 const initialState = { error: null };
 
-export default function IntakeForm({ referral, careNeedOptions }) {
+export default function IntakeForm({ referral, careNeedOptions, locations = [] }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(submitIntakeAction, initialState);
 
@@ -38,6 +38,26 @@ export default function IntakeForm({ referral, careNeedOptions }) {
           <Field label="Preferred Language" name="language" defaultValue="English" />
           <Field label="Street Address" name="address" full />
           <Field label="City, State, ZIP" name="cityStateZip" full />
+          <div className="flex flex-col gap-1.5 col-span-full">
+            <span className="text-[11.5px] font-display font-bold text-[oklch(45%_0.02_80)]">Location</span>
+            <select
+              name="locationId"
+              defaultValue=""
+              required
+              className="border border-[oklch(85%_0.01_85)] rounded-[9px] px-3 py-2.5 text-[13.5px] bg-[oklch(99%_0.004_85)] focus:outline-2 focus:outline-[oklch(80%_0.05_175)] focus:border-[oklch(60%_0.08_175)]"
+            >
+              <option value="">Pick a location&hellip;</option>
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>{loc.name}</option>
+              ))}
+            </select>
+            {locations.length === 0 && (
+              <span className="text-[11.5px] text-[var(--danger)]">
+                This organization has no locations yet — an admin needs to create one before
+                intake can be completed.
+              </span>
+            )}
+          </div>
         </Grid>
       </Section>
 

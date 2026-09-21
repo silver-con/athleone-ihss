@@ -14,8 +14,8 @@ export default async function AdminTrainingPage() {
 
   const [courses, caregivers, completions] = await Promise.all([
     getCourses(session.organizationId),
-    getCaregivers(session.organizationId),
-    getAllCompletions(session.organizationId),
+    getCaregivers(session.organizationId, session.locationId),
+    getAllCompletions(session.organizationId, session.locationId),
   ]);
 
   const initialCourses = courses.filter((c) => c.courseType === 'initial');

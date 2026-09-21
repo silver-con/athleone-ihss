@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireSession } from '@/actions/auth';
+import { requirePermission } from '@/actions/auth';
 import * as db from '@/lib/queries';
 
 // Turns the free-text "Purchased Tasks" line from a payer authorization
@@ -18,7 +18,7 @@ function parseTaskList(raw) {
 }
 
 export async function createAuthorizationAction(formData) {
-  const session = await requireSession(['ADMIN', 'COORDINATOR']);
+  const session = await requirePermission('admin.carePlans.manage');
   const clientId = String(formData.get('clientId') || '').trim();
 
   await db.createServiceAuthorization(session.organizationId, {
@@ -34,6 +34,8 @@ export async function createAuthorizationAction(formData) {
     totalHoursPerWeek: formData.get('totalHoursPerWeek') ? Number(formData.get('totalHoursPerWeek')) : null,
     totalUnitsPerWeek: formData.get('totalUnitsPerWeek') ? Number(formData.get('totalUnitsPerWeek')) : null,
     unitMinutes: formData.get('unitMinutes') ? Number(formData.get('unitMinutes')) : 15,
+    // Blank stays null rather than becoming 0 — see createServiceAuthorization.
+    ratePerUnit: formData.get('ratePerUnit') ? Number(formData.get('ratePerUnit')) : null,
     frequency: String(formData.get('frequency') || 'Weekly').trim(),
     startDate: String(formData.get('startDate') || '').trim(),
     endDate: String(formData.get('endDate') || '').trim(),
@@ -45,4 +47,7 @@ export async function createAuthorizationAction(formData) {
   revalidatePath(`/admin/clients/${clientId}/care-plan`);
   revalidatePath('/admin/finance');
   revalidatePath('/admin/clients');
+  // The rate on this authorization is what turns this client's billing
+  // lines into dollars on the franchise rollup, so that page is stale now.
+  revalidatePath('/admin/locations');
 }

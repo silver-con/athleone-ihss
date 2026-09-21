@@ -16,8 +16,8 @@ export default async function AdminCarePlansPage() {
   if (!session) redirect('/login');
 
   const [authorizations, clients] = await Promise.all([
-    getAllServiceAuthorizations(session.organizationId),
-    getClients(session.organizationId),
+    getAllServiceAuthorizations(session.organizationId, session.locationId),
+    getClients(session.organizationId, session.locationId),
   ]);
 
   const withAuth = new Set(authorizations.map((a) => a.clientId));

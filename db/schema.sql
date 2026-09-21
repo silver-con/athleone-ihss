@@ -14,14 +14,89 @@
 -- project doc "multitenant-hhaexchange-architecture-spec.md" for the full
 -- design rationale.
 
+-- provider_enrollment_attested and baa_signed are self-attestation flags
+-- an agency's own admin checks on the onboarding go-live checklist
+-- (/admin/onboarding) — same pattern as organization_docusign_credentials.
+-- baa_on_file elsewhere in this schema: Hearth's software has no way to
+-- verify either claim, so it records the attestation, not proof. Note
+-- baa_signed is the master Hearth<->agency Business Associate Agreement
+-- (architecture spec §6) — a different document from DocuSign's own BAA
+-- (organization_docusign_credentials.baa_on_file), which separately gates
+-- whether PHI-bearing documents can go through DocuSign specifically.
+--
+-- SCHEMA DRIFT WARNING: same class of issue as the DocuSign signed_via/
+-- envelope_id columns before it — CREATE TABLE IF NOT EXISTS is a no-op
+-- against a pre-existing organizations table, so these three columns will
+-- NOT retroactively appear on a real dev database via `npm run db:setup`.
+-- If you have a pre-existing dev database and want to keep its data, run:
+--   ALTER TABLE organizations
+--     ADD COLUMN IF NOT EXISTS provider_enrollment_attested boolean NOT NULL DEFAULT false,
+--     ADD COLUMN IF NOT EXISTS baa_signed boolean NOT NULL DEFAULT false,
+--     ADD COLUMN IF NOT EXISTS baa_signed_at timestamptz;
+-- Otherwise, for a disposable local/dev database: dropdb hearth && createdb
+-- hearth && npm run db:setup && npm run db:seed.
 CREATE TABLE IF NOT EXISTS organizations (
   id                            text PRIMARY KEY,
   name                          text NOT NULL,
   texas_medicaid_provider_number text,
   npi                           text,
   hcssa_license_number          text,
+  provider_enrollment_attested  boolean NOT NULL DEFAULT false,
+  baa_signed                    boolean NOT NULL DEFAULT false,
+  baa_signed_at                 timestamptz,
   status                        text NOT NULL DEFAULT 'trial' CHECK (status IN ('trial', 'active', 'suspended')),
   created_at                    timestamptz NOT NULL DEFAULT now()
+);
+
+-- SCHEMA DRIFT WARNING (locations + everything below that references
+-- it): this is the third time today this exact class of issue has come
+-- up (see organizations' and platform_admins' own drift warnings above) —
+-- CREATE TABLE IF NOT EXISTS and a bare CREATE TABLE for a brand-new
+-- table are both no-ops against a database that's already been set up
+-- once, so `locations` plus every new column on the four PRE-EXISTING
+-- tables below (caregivers, clients, users, service_authorizations) will
+-- NOT appear on a real dev database via `npm run db:setup`. Against a
+-- pre-existing dev database you want to keep, run all of these:
+--   CREATE TABLE IF NOT EXISTS locations (
+--     id              text PRIMARY KEY,
+--     organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+--     name            text NOT NULL,
+--     commission_rate numeric(5,2) NOT NULL DEFAULT 0 CHECK (commission_rate >= 0 AND commission_rate <= 100),
+--     status          text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+--     created_at      timestamptz NOT NULL DEFAULT now()
+--   );
+--   ALTER TABLE caregivers ADD COLUMN IF NOT EXISTS location_id text REFERENCES locations(id) ON DELETE SET NULL;
+--   ALTER TABLE clients ADD COLUMN IF NOT EXISTS location_id text REFERENCES locations(id) ON DELETE SET NULL;
+--   ALTER TABLE users ADD COLUMN IF NOT EXISTS location_id text REFERENCES locations(id) ON DELETE SET NULL;
+--   ALTER TABLE service_authorizations ADD COLUMN IF NOT EXISTS rate_per_unit numeric;
+--   CREATE INDEX IF NOT EXISTS idx_locations_org ON locations(organization_id);
+--   CREATE INDEX IF NOT EXISTS idx_caregivers_location ON caregivers(location_id);
+--   CREATE INDEX IF NOT EXISTS idx_clients_location ON clients(location_id);
+--   CREATE INDEX IF NOT EXISTS idx_users_location ON users(location_id);
+-- Otherwise, for a disposable local/dev database: dropdb hearth && createdb
+-- hearth && npm run db:setup && npm run db:seed.
+
+-- LOCATIONS — an agency (organizations row) may operate more than one
+-- physical branch/franchise under its single Texas license. This is
+-- deliberately a THIRD tier under organization_id, not a replacement for
+-- it: the Medicaid provider number, NPI, HCSSA license, EVV/DocuSign
+-- credentials, and BAA all stay on `organizations` (the license itself is
+-- agency-wide, not per-branch — see the multitenant-hhaexchange-
+-- architecture-spec.md project doc, "Locations & franchise commissions").
+-- Only day-to-day operational data — which caregivers, which clients, and
+-- the revenue that flows from their visits — is what a location scopes.
+-- commission_rate is what the agency (the license holder) takes from a
+-- location's revenue when that location operates as a partner/franchise
+-- under the agency's license, per the org admin's own franchise terms
+-- with that location — 0 for a location that isn't a revenue-share
+-- arrangement at all (the agency's own branch, say).
+CREATE TABLE IF NOT EXISTS locations (
+  id              text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name            text NOT NULL,
+  commission_rate numeric(5,2) NOT NULL DEFAULT 0 CHECK (commission_rate >= 0 AND commission_rate <= 100),
+  status          text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+  created_at      timestamptz NOT NULL DEFAULT now()
 );
 
 -- Caregiver status covers both the hiring pipeline and working state:
@@ -37,7 +112,11 @@ CREATE TABLE IF NOT EXISTS caregivers (
   phone           text NOT NULL,
   email           text,
   hired_on        text,
-  status          text NOT NULL DEFAULT 'active' CHECK (status IN ('applicant', 'onboarding', 'active', 'on-leave', 'inactive'))
+  status          text NOT NULL DEFAULT 'active' CHECK (status IN ('applicant', 'onboarding', 'active', 'on-leave', 'inactive')),
+  -- NULL = not assigned to a location (agency-wide/unassigned — the only
+  -- state possible before an agency creates any locations, and still a
+  -- valid state after: not every caregiver has to belong to one).
+  location_id     text REFERENCES locations(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS referrals (
@@ -71,6 +150,10 @@ CREATE TABLE IF NOT EXISTS clients (
   -- The individual's HHSC/DADS number as it appears on payer authorizations
   -- and on the Attendant Orientation form required by 26 TAC §97.
   hhsc_individual_number text,
+  -- Set at intake (see IntakeForm.js) — which branch/franchise location
+  -- this client belongs to. NULL for agencies with no locations, or for a
+  -- client an agency deliberately keeps agency-wide.
+  location_id           text REFERENCES locations(id) ON DELETE SET NULL,
   created_at            timestamptz NOT NULL DEFAULT now()
 );
 
@@ -112,10 +195,92 @@ CREATE TABLE IF NOT EXISTS users (
   email           text NOT NULL UNIQUE,
   password_hash   text NOT NULL,
   name            text NOT NULL,
-  role            text NOT NULL CHECK (role IN ('COORDINATOR', 'ADMIN', 'CAREGIVER')),
+  role            text NOT NULL CHECK (role IN ('COORDINATOR', 'ADMIN', 'LOCATION_ADMIN', 'CAREGIVER')),
   caregiver_id    text UNIQUE REFERENCES caregivers(id) ON DELETE CASCADE,
+  -- NULL = organization-wide access. That is correct and expected for an
+  -- ADMIN (the organization admin, who must see every location) and is
+  -- what every pre-existing account has.
+  --
+  -- REQUIRED for a LOCATION_ADMIN — that role exists precisely to be
+  -- scoped to one location, and actions/team.js refuses to create one
+  -- without a location_id. Set automatically for a CAREGIVER from their
+  -- caregiver row at creation (lib/queries.js's createCaregiverWithLogin).
+  --
+  -- CONSTRAINT DRIFT WARNING — a different failure mode from the column
+  -- drift warned about elsewhere in this file, and one that
+  -- scripts/check-schema.mjs does NOT catch: that script compares tables
+  -- and columns only, never CHECK constraints. Adding 'LOCATION_ADMIN' to
+  -- the role CHECK above therefore needs this run by hand against any
+  -- pre-existing database, or every attempt to create a location admin
+  -- fails at runtime with a constraint violation:
+  --   ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+  --   ALTER TABLE users ADD CONSTRAINT users_role_check
+  --     CHECK (role IN ('COORDINATOR', 'ADMIN', 'LOCATION_ADMIN', 'CAREGIVER'));
+  location_id     text REFERENCES locations(id) ON DELETE SET NULL,
   created_at      timestamptz NOT NULL DEFAULT now()
 );
+
+-- PLATFORM ADMIN — Hearth's own ops staff, not any tenant's staff.
+--
+-- Deliberately its own table, NOT a row in `users` with organization_id
+-- set to something special: `users.organization_id` is NOT NULL precisely
+-- because "every user belongs to exactly one agency" is the invariant the
+-- rest of the multi-tenant model leans on (see the MULTI-TENANCY note at
+-- the top of this file and lib/queries.js's requireOrgId). A platform
+-- admin explicitly isn't scoped to one agency — architecture spec §3 calls
+-- this "the highest-risk role in the system" because it can see across
+-- every tenant — so keeping it a fully separate table means no ordinary
+-- organization_id-filtered query can ever accidentally match one.
+--
+-- There is deliberately no signup page, invite flow, or admin-UI button
+-- that creates a row here — the only way is scripts/create-platform-admin.mjs,
+-- run directly against the database by someone with server/DB access. See
+-- the script for why, and README.md's "Platform admin" section for usage.
+-- platform_role is the sub-role WITHIN the platform-admin role itself,
+-- distinct from the four session roles in lib/permissions.js (ROLES) —
+-- every platform admin, 'support' or 'full', still has session.role ===
+-- 'PLATFORM_ADMIN' and can reach every page under /platform. 'support' can
+-- view the agency dashboard and the platform team list; 'full' can
+-- additionally onboard a new agency and add/deactivate platform admins.
+-- Defaults to 'full' (not 'support') specifically so this column's
+-- addition never silently downgrades an existing platform admin's
+-- capability — see actions/platform.js for where this is enforced.
+--
+-- SCHEMA DRIFT WARNING: same class of issue as organizations' extra
+-- columns above — CREATE TABLE IF NOT EXISTS is a no-op against a
+-- pre-existing platform_admins table, so `active`/`platform_role` will NOT
+-- retroactively appear on a real dev database via `npm run db:setup`. If
+-- you have a pre-existing dev database and want to keep its data, run:
+--   ALTER TABLE platform_admins ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true;
+--   ALTER TABLE platform_admins ADD COLUMN IF NOT EXISTS platform_role text NOT NULL DEFAULT 'full';
+--   ALTER TABLE platform_admins ADD CONSTRAINT platform_admins_platform_role_check CHECK (platform_role IN ('support', 'full'));
+-- Otherwise, for a disposable local/dev database: dropdb hearth && createdb
+-- hearth && npm run db:setup && npm run db:seed.
+CREATE TABLE IF NOT EXISTS platform_admins (
+  id            text PRIMARY KEY,
+  email         text NOT NULL UNIQUE,
+  password_hash text NOT NULL,
+  name          text NOT NULL,
+  active        boolean NOT NULL DEFAULT true,
+  platform_role text NOT NULL DEFAULT 'full' CHECK (platform_role IN ('support', 'full')),
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+-- Every platform-admin session records what it looked at — the spec's
+-- "access is logged more heavily than normal admin access" requirement.
+-- v1 of the platform dashboard (2026) is read-only (no tenant data can be
+-- edited from it), so today this only ever logs 'view_dashboard'; the
+-- column shape is deliberately generic so a future write-capable action
+-- can log here too without a schema change.
+CREATE TABLE IF NOT EXISTS platform_admin_access_log (
+  id                 text PRIMARY KEY,
+  platform_admin_id  text NOT NULL REFERENCES platform_admins(id) ON DELETE CASCADE,
+  action             text NOT NULL,
+  detail             text,
+  created_at         timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_platform_admin_log_admin ON platform_admin_access_log(platform_admin_id);
 
 -- EVV AGGREGATOR INTEGRATION (HHAeXchange)
 --
@@ -190,6 +355,16 @@ CREATE TABLE IF NOT EXISTS service_authorizations (
   status                text NOT NULL DEFAULT 'approved' CHECK (status IN ('pending', 'approved', 'denied', 'expired')),
   purchased_tasks       jsonb NOT NULL DEFAULT '[]',
   notes                 text,
+  -- Dollar rate per billed unit for THIS authorization specifically —
+  -- deliberately not a global rate table (see deferred-backlog.md's care
+  -- plan template caution: "rates should not be baked into templates —
+  -- HHSC revises them and a stale hardcoded rate is worse than none").
+  -- Office staff enter the actual contracted/payer rate here when known;
+  -- left NULL when not yet known, in which case this authorization's
+  -- billing lines are excluded from the dollar revenue total shown on
+  -- /admin/locations rather than silently counted as $0 — see
+  -- getLocationRevenueSummary in lib/queries.js.
+  rate_per_unit         numeric,
   created_at            timestamptz NOT NULL DEFAULT now()
 );
 
@@ -213,7 +388,11 @@ CREATE TABLE IF NOT EXISTS billing_lines (
   created_at               timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS idx_locations_org ON locations(organization_id);
 CREATE INDEX IF NOT EXISTS idx_caregivers_org ON caregivers(organization_id);
+CREATE INDEX IF NOT EXISTS idx_caregivers_location ON caregivers(location_id);
+CREATE INDEX IF NOT EXISTS idx_clients_location ON clients(location_id);
+CREATE INDEX IF NOT EXISTS idx_users_location ON users(location_id);
 CREATE INDEX IF NOT EXISTS idx_referrals_org ON referrals(organization_id);
 CREATE INDEX IF NOT EXISTS idx_clients_org ON clients(organization_id);
 CREATE INDEX IF NOT EXISTS idx_clients_caregiver ON clients(assigned_caregiver_id);

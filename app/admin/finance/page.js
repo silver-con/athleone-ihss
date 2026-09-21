@@ -1,7 +1,13 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { getBillingLines, getClients, getAllServiceAuthorizations } from '@/lib/queries';
+import {
+  getBillingLines,
+  getClients,
+  getAllServiceAuthorizations,
+  getEvvCredentials,
+  getVisitsAwaitingEvvConfirmation,
+} from '@/lib/queries';
 import StatTile from '@/components/StatTile';
 import BillingStatusSelect from '@/components/admin/BillingStatusSelect';
 import { createBillingLineAction } from '@/actions/billing';
@@ -18,11 +24,21 @@ export default async function AdminFinancePage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const [billingLines, clients, authorizations] = await Promise.all([
-    getBillingLines(session.organizationId),
-    getClients(session.organizationId),
-    getAllServiceAuthorizations(session.organizationId),
+  const [billingLines, clients, authorizations, evvCredentials] = await Promise.all([
+    getBillingLines(session.organizationId, session.locationId),
+    getClients(session.organizationId, session.locationId),
+    getAllServiceAuthorizations(session.organizationId, session.locationId),
+    getEvvCredentials(session.organizationId),
   ]);
+
+  // Compliance gate: once this agency's EVV transmission is 'live', billing
+  // lines no longer draft from local clock-out — they wait for the state
+  // aggregator to acknowledge the visit (see clockOut in lib/queries.js).
+  // That queue needs to be visible here, not just absent from the ledger
+  // below, or a completed visit with no billing line looks like a bug
+  // instead of a visit correctly waiting on EVV confirmation.
+  const evvIsLive = evvCredentials?.status === 'live';
+  const awaitingEvv = evvIsLive ? await getVisitsAwaitingEvvConfirmation(session.organizationId, session.locationId) : [];
 
   const pendingCount = billingLines.filter((b) => b.status === 'pending').length;
   const readyCount = billingLines.filter((b) => b.status === 'ready').length;
@@ -55,7 +71,45 @@ export default async function AdminFinancePage() {
         <StatTile num={readyCount} label="Ready to submit" />
         <StatTile num={deniedCount} label="Denied" accent={deniedCount > 0 ? 'var(--danger)' : undefined} />
         <StatTile num={unitsThisWeek} label="Total units logged" />
+        {evvIsLive && (
+          <StatTile
+            num={awaitingEvv.length}
+            label="Awaiting EVV confirmation"
+            accent={awaitingEvv.length > 0 ? 'oklch(58% 0.13 55)' : undefined}
+          />
+        )}
       </div>
+
+      {evvIsLive && awaitingEvv.length > 0 && (
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden mt-6">
+          <div className="px-5 py-3.5 border-b border-[var(--border)]">
+            <div className="font-display font-extrabold text-[14.5px]">Awaiting EVV confirmation</div>
+            <p className="text-[12.5px] text-[var(--muted)] mt-1">
+              Completed visits that haven&rsquo;t generated a billing line yet — EVV is live for this agency, so a
+              claim line only drafts once the state aggregator acknowledges the visit, not from clock-out alone.
+            </p>
+          </div>
+          <div className="grid grid-cols-[1.3fr_1.3fr_1fr_1fr_1fr] px-5 py-3 text-[11px] font-display font-bold uppercase tracking-wide text-[var(--muted)] border-b border-[var(--border)]">
+            <div>Client</div>
+            <div>Caregiver</div>
+            <div>Service date</div>
+            <div>EVV status</div>
+            <div>Detail</div>
+          </div>
+          {awaitingEvv.map((v) => (
+            <div
+              key={v.id}
+              className="grid grid-cols-[1.3fr_1.3fr_1fr_1fr_1fr] px-5 py-3.5 text-[13px] items-center border-b border-[oklch(93%_0.01_85)] last:border-none"
+            >
+              <div className="font-display font-bold text-[14px]">{v.clientName}</div>
+              <div>{v.caregiverName || '—'}</div>
+              <div>{v.serviceDate}</div>
+              <div className="capitalize">{v.syncStatus}</div>
+              <div className="text-[12px] text-[var(--danger)]">{v.syncError || ''}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 mt-6">
         <div className="font-display font-extrabold text-[14.5px] mb-4">Authorization utilization</div>

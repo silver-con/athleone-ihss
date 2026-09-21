@@ -3,14 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "predev": "node --env-file=.env scripts/check-schema.mjs",
     "db:setup": "node --env-file=.env scripts/db-setup.mjs",
+    "db:check": "node --env-file=.env scripts/check-schema.mjs",
     "db:seed": "node --env-file=.env scripts/seed.mjs",
-    "mock:evv": "node mocks/hhaexchange-mock.mjs",
-    "db:check": "node --env-file=.env scripts/check-schema.mjs"
+    "platform:create-admin": "node --env-file=.env scripts/create-platform-admin.mjs",
+    "mock:evv": "node mocks/hhaexchange-mock.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

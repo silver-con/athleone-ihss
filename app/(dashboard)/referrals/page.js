@@ -17,10 +17,20 @@ export default async function ReferralsPage() {
 
   return (
     <div>
-      <h1 className="font-display font-extrabold text-[24px] tracking-tight">Referrals</h1>
-      <p className="text-[13.5px] text-[var(--muted)] mt-1">
-        Incoming client referrals from health plans and hospitals
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display font-extrabold text-[24px] tracking-tight">Referrals</h1>
+          <p className="text-[13.5px] text-[var(--muted)] mt-1">
+            Incoming client referrals from health plans and hospitals
+          </p>
+        </div>
+        <Link
+          href="/referrals/new"
+          className="bg-[var(--accent-strong)] text-white rounded-[10px] px-4 py-2.5 font-display font-bold text-[13px] whitespace-nowrap"
+        >
+          + New Referral
+        </Link>
+      </div>
 
       <div className="flex gap-3 mt-6">
         <StatChip num={newCount} label="New" />
@@ -33,6 +43,17 @@ export default async function ReferralsPage() {
       </Suspense>
 
       <div className="flex flex-col gap-2.5 mt-6">
+        {referrals.length === 0 && (
+          <div className="bg-[var(--surface)] border border-dashed border-[var(--border)] rounded-2xl px-5 py-8 text-center">
+            <p className="text-[13.5px] text-[var(--muted)]">No referrals yet.</p>
+            <Link
+              href="/referrals/new"
+              className="inline-block mt-3 bg-[var(--accent-strong)] text-white rounded-[9px] px-4 py-2.5 font-display font-bold text-[12.5px]"
+            >
+              + New Referral
+            </Link>
+          </div>
+        )}
         {referrals.map((r) => {
           const status = statusInfo(r.status);
           return (

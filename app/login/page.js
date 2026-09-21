@@ -27,6 +27,9 @@ export default async function LoginPage({ searchParams }) {
         </div>
 
         <p className="text-center text-[12px] text-[var(--muted)] mt-5">
+          New agency? Hearth sets your account up for you — contact your Hearth representative.
+        </p>
+        <p className="text-center text-[12px] text-[var(--muted)] mt-2">
           <Link href="/" className="font-display font-bold text-[var(--accent)]">
             ← Back to overview
           </Link>

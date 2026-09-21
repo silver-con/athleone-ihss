@@ -1,11 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireSession } from '@/actions/auth';
+import { requirePermission } from '@/actions/auth';
 import * as db from '@/lib/queries';
 
 export async function createCourseAction(formData) {
-  const session = await requireSession(['ADMIN', 'COORDINATOR']);
+  const session = await requirePermission('admin.training.manage');
 
   const title = String(formData.get('title') || '').trim();
   if (!title) return;
@@ -28,7 +28,7 @@ export async function createCourseAction(formData) {
 // comes from the session, never from the form, so one caregiver can't
 // mark another's training complete.
 export async function markCourseCompleteAction(courseId) {
-  const session = await requireSession(['CAREGIVER']);
+  const session = await requirePermission('caregiver.training.complete');
   if (!session.caregiverId) return;
 
   await db.markCourseComplete(session.organizationId, session.caregiverId, courseId);

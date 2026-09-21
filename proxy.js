@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server';
 import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/session';
+import { ROUTE_PERMISSIONS, PERMISSIONS } from '@/lib/permissions';
 
-// Path prefixes each role is allowed into. Anything not matched here (the
-// landing page, /login, static assets) is public.
-const ROLE_PREFIXES = {
-  COORDINATOR: ['/referrals', '/clients', '/fax'],
-  ADMIN: ['/admin', '/referrals', '/clients', '/fax'],
-  CAREGIVER: ['/caregiver'],
-};
-
-const PROTECTED_PREFIXES = ['/referrals', '/clients', '/fax', '/admin', '/caregiver'];
+// Which top-level sections require a session at all. Anything not matched
+// here (the landing page, /login, /signup, static assets) is public. This
+// list is intentionally still just the coarse prefixes — it only answers
+// "does this need a login," not "which role" — that question is answered
+// per-route below, by lib/permissions.js's ROUTE_PERMISSIONS table.
+const PROTECTED_PREFIXES = ['/referrals', '/clients', '/fax', '/admin', '/caregiver', '/platform'];
 
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
@@ -28,12 +26,27 @@ export async function proxy(request) {
     return NextResponse.redirect(loginUrl);
   }
 
-  const allowedPrefixes = ROLE_PREFIXES[session.role] || [];
-  const allowed = allowedPrefixes.some((p) => pathname === p || pathname.startsWith(p + '/'));
+  // Look up the specific permission this route needs from the single
+  // catalog in lib/permissions.js (also what every Server Action checks
+  // against via requirePermission()), rather than a role-vs-prefix table
+  // that couldn't tell two pages under the same prefix apart. Every
+  // protected prefix ends with a catch-all entry, so this should always
+  // find a match; the null-check below is a fail-safe, not an expected path.
+  const match = ROUTE_PERMISSIONS.find((r) => r.test(pathname));
+  const allowed = match ? (PERMISSIONS[match.key]?.roles || []).includes(session.role) : false;
+
   if (!allowed) {
-    // Signed in, but this account's role doesn't cover this section —
-    // send them to the home base for their own role instead of a raw 403.
-    const home = session.role === 'ADMIN' ? '/admin' : session.role === 'CAREGIVER' ? '/caregiver' : '/referrals';
+    // Signed in, but this account's role doesn't hold the permission this
+    // route needs — send them to the home base for their own role instead
+    // of a raw 403.
+    const home =
+      session.role === 'ADMIN'
+        ? '/admin'
+        : session.role === 'CAREGIVER'
+        ? '/caregiver'
+        : session.role === 'PLATFORM_ADMIN'
+        ? '/platform'
+        : '/referrals';
     return NextResponse.redirect(new URL(home, request.url));
   }
 
@@ -41,5 +54,12 @@ export async function proxy(request) {
 }
 
 export const config = {
-  matcher: ['/referrals/:path*', '/clients/:path*', '/fax/:path*', '/admin/:path*', '/caregiver/:path*'],
+  matcher: [
+    '/referrals/:path*',
+    '/clients/:path*',
+    '/fax/:path*',
+    '/admin/:path*',
+    '/caregiver/:path*',
+    '/platform/:path*',
+  ],
 };

@@ -7,10 +7,12 @@ import {
   getAllLatestChecks,
   getAllCompletions,
   getCourses,
+  getLocations,
   CHECK_TYPES,
 } from '@/lib/queries';
 import CaregiverStatusToggle from '@/components/admin/CaregiverStatusToggle';
 import AddCaregiverForm from '@/components/admin/AddCaregiverForm';
+import LocationAssignSelect from '@/components/admin/LocationAssignSelect';
 
 // Credentialing state for the roster view: a caregiver is "attention
 // needed" if any required check is missing or past its next-due date.
@@ -44,13 +46,24 @@ export default async function AdminCaregiversPage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const [caregivers, clients, checks, completions, courses] = await Promise.all([
-    getCaregivers(session.organizationId),
-    getClients(session.organizationId),
-    getAllLatestChecks(session.organizationId),
-    getAllCompletions(session.organizationId),
+  // `locations` (every one, inactive included) feeds the reassignment
+  // control an org admin uses to retire a branch's people; `hireLocations`
+  // is what a new hire may be placed into — active only, and for a
+  // location admin, only their own.
+  const [caregivers, clients, checks, completions, courses, locations] = await Promise.all([
+    getCaregivers(session.organizationId, session.locationId),
+    getClients(session.organizationId, session.locationId),
+    getAllLatestChecks(session.organizationId, session.locationId),
+    getAllCompletions(session.organizationId, session.locationId),
     getCourses(session.organizationId),
+    getLocations(session.organizationId),
   ]);
+
+  const canReassign = session.role === 'ADMIN';
+  const locationById = Object.fromEntries(locations.map((l) => [l.id, l]));
+  const hireLocations = locations.filter(
+    (l) => l.status === 'active' && (!session.locationId || l.id === session.locationId)
+  );
 
   const initialCourseIds = new Set(
     courses.filter((c) => c.courseType === 'initial').map((c) => c.id)
@@ -64,9 +77,10 @@ export default async function AdminCaregiversPage() {
       </p>
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden mt-6">
-        <div className="grid grid-cols-[1.6fr_1.2fr_0.7fr_1fr_1.2fr_0.9fr_1fr] px-5 py-3 text-[11px] font-display font-bold uppercase tracking-wide text-[var(--muted)] border-b border-[var(--border)]">
+        <div className="grid grid-cols-[1.4fr_1fr_0.9fr_0.6fr_0.9fr_1.1fr_0.8fr_0.9fr] px-5 py-3 text-[11px] font-display font-bold uppercase tracking-wide text-[var(--muted)] border-b border-[var(--border)]">
           <div>Caregiver</div>
           <div>Role</div>
+          <div>Location</div>
           <div>Clients</div>
           <div>Hours / week</div>
           <div>Credentialing</div>
@@ -85,7 +99,7 @@ export default async function AdminCaregiversPage() {
           return (
             <div
               key={cg.id}
-              className="grid grid-cols-[1.6fr_1.2fr_0.7fr_1fr_1.2fr_0.9fr_1fr] px-5 py-3.5 text-[13px] items-center border-b border-[oklch(93%_0.01_85)] last:border-none"
+              className="grid grid-cols-[1.4fr_1fr_0.9fr_0.6fr_0.9fr_1.1fr_0.8fr_0.9fr] px-5 py-3.5 text-[13px] items-center border-b border-[oklch(93%_0.01_85)] last:border-none"
             >
               <div>
                 <Link
@@ -97,6 +111,20 @@ export default async function AdminCaregiversPage() {
                 <div className="text-[12px] text-[var(--muted)] mt-0.5">{cg.phone}</div>
               </div>
               <div>{cg.role}</div>
+              <div className="pr-2">
+                {canReassign ? (
+                  <LocationAssignSelect
+                    kind="caregiver"
+                    recordId={cg.id}
+                    locationId={cg.locationId}
+                    locations={locations}
+                  />
+                ) : (
+                  <span className="text-[12.5px] text-[var(--muted)]">
+                    {locationById[cg.locationId]?.name || 'No location'}
+                  </span>
+                )}
+              </div>
               <div>{assigned.length}</div>
               <div>{hours} hrs/wk</div>
               <div className={'text-[12.5px] font-display font-bold ' + TONE_CLASS[cred.tone]}>
@@ -113,7 +141,25 @@ export default async function AdminCaregiversPage() {
         })}
       </div>
 
-      <AddCaregiverForm />
+      {hireLocations.length === 0 ? (
+        <div className="bg-[oklch(97%_0.03_85)] border border-[oklch(85%_0.07_75)] rounded-2xl p-5 mt-4">
+          <div className="font-display font-extrabold text-[14px]">
+            Create a location first
+          </div>
+          <p className="text-[13px] text-[var(--muted)] mt-1.5 max-w-[620px]">
+            Everyone and everything belongs to a location, even if this organization only
+            operates one site. Create one and this form opens up.
+          </p>
+          <Link
+            href="/admin/locations"
+            className="inline-block mt-3 bg-[var(--accent-strong)] text-white font-display font-bold text-[12.5px] px-4 py-2 rounded-[9px]"
+          >
+            Go to Locations &rarr;
+          </Link>
+        </div>
+      ) : (
+        <AddCaregiverForm locations={hireLocations} />
+      )}
     </div>
   );
 }

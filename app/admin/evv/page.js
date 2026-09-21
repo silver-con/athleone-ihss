@@ -12,9 +12,9 @@ export default async function EvvPage() {
   const session = await getSession();
   if (!session) redirect('/login');
   const [allVisits, clients, caregivers] = await Promise.all([
-    getVisits(session.organizationId),
-    getClients(session.organizationId),
-    getCaregivers(session.organizationId),
+    getVisits(session.organizationId, session.locationId),
+    getClients(session.organizationId, session.locationId),
+    getCaregivers(session.organizationId, session.locationId),
   ]);
 
   // This page is scoped to the current week's schedule; older backlog

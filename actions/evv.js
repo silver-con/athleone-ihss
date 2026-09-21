@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireSession } from '@/actions/auth';
+import { requirePermission } from '@/actions/auth';
 import * as db from '@/lib/queries';
 import { encryptSecret } from '@/lib/secrets';
 import { testConnection, clearTokenCache } from '@/lib/hhaexchange';
@@ -11,7 +11,7 @@ import { runSyncCycle } from '@/lib/evv-sync';
 // so an admin can correct the base URL or provider IDs without re-entering
 // the client secret (which they can't read back — it's encrypted).
 export async function saveEvvCredentialsAction(prevState, formData) {
-  const session = await requireSession(['ADMIN']);
+  const session = await requirePermission('admin.evv.credentials.manage');
   const existing = await db.getEvvCredentials(session.organizationId);
 
   const clientId = String(formData.get('clientId') || '').trim();
@@ -45,7 +45,7 @@ export async function saveEvvCredentialsAction(prevState, formData) {
 }
 
 export async function testEvvConnectionAction() {
-  const session = await requireSession(['ADMIN']);
+  const session = await requirePermission('admin.evv.credentials.manage');
   const credentials = await db.getEvvCredentials(session.organizationId);
   if (!credentials) return { ok: false, error: 'No credentials saved yet.' };
 
@@ -63,7 +63,7 @@ export async function testEvvConnectionAction() {
 // function is what a scheduled job would call; the button exists so office
 // staff are never stuck waiting on a scheduler.
 export async function runEvvSyncAction() {
-  const session = await requireSession(['ADMIN']);
+  const session = await requirePermission('admin.evv.sync.manage');
   const result = await runSyncCycle(session.organizationId);
   revalidatePath('/admin/evv/sync');
   revalidatePath('/admin/evv');
@@ -71,7 +71,7 @@ export async function runEvvSyncAction() {
 }
 
 export async function retrySyncRowAction(rowId) {
-  const session = await requireSession(['ADMIN']);
+  const session = await requirePermission('admin.evv.sync.manage');
   await db.retrySyncRow(session.organizationId, rowId);
   revalidatePath('/admin/evv/sync');
 }

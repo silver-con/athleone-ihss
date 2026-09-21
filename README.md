@@ -124,6 +124,24 @@ and `client-systems-gap-discovery.md` docs for the full design rationale,
 the Texas HHAeXchange EVV integration plan, and the compliance/handoff
 brief for a senior developer's review.
 
+### Platform admin
+
+A platform admin is Hearth's own staff, not any tenant's — it can see
+every agency's onboarding/EVV status at `/platform`, but nothing else in
+the app, and (v1) that dashboard is read-only. This is deliberately the
+highest-risk role in the system (architecture spec §3), so unlike every
+other account there is no signup page, invite flow, or admin-UI button
+that creates one. The only way is:
+
+```bash
+npm run platform:create-admin -- --email=ops@hearth.example --name="Jane Ops" --password="something-strong"
+```
+
+Run that against whichever database you mean to grant access to, sign in
+at `/login` with the same email/password as any other account, and you'll
+land on `/platform` instead of `/admin`. Every dashboard view is logged to
+`platform_admin_access_log` (who, when) per the spec's audit requirement.
+
 ## Workflow to try
 
 **Intake coordinator side** — sign in as `coordinator@hearth.demo`:

@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { requireSession } from '@/actions/auth';
+import { requirePermission } from '@/actions/auth';
 import { hashPassword } from '@/lib/auth';
 import { queryOne } from '@/lib/db';
 import * as db from '@/lib/queries';
@@ -20,7 +20,7 @@ function yesNo(formData, field) {
 // caregiver id comes from the session, never the form — nobody can submit
 // an application against someone else's record.
 export async function submitApplicationAction(prevState, formData) {
-  const session = await requireSession(['CAREGIVER']);
+  const session = await requirePermission('caregiver.onboarding.apply');
   if (!session.caregiverId) return { error: 'No caregiver record linked to this account.' };
 
   if (!formData.get('certifiedTrue')) {
@@ -85,7 +85,7 @@ export async function submitApplicationAction(prevState, formData) {
 
 // Admin adds a new applicant plus the login they will use to onboard.
 export async function addCaregiverAction(prevState, formData) {
-  const session = await requireSession(['ADMIN']);
+  const session = await requirePermission('admin.caregivers.manage');
 
   const name = String(formData.get('name') || '').trim();
   const email = String(formData.get('email') || '').trim().toLowerCase();
@@ -103,6 +103,15 @@ export async function addCaregiverAction(prevState, formData) {
     return { error: 'An account with that email already exists.' };
   }
 
+  // A location admin can only ever hire into their own location — the
+  // form's value is ignored for them, not trusted. And a location is
+  // required for everyone: the form marks the select required, but a
+  // Server Action is a public endpoint, so that has to hold here too.
+  const locationId = session.locationId || String(formData.get('locationId') || '').trim() || null;
+  if (!locationId) {
+    return { error: 'Pick the location this caregiver is being hired into.' };
+  }
+
   let caregiverId;
   try {
     caregiverId = await db.createCaregiverWithLogin(session.organizationId, {
@@ -111,6 +120,7 @@ export async function addCaregiverAction(prevState, formData) {
       role: String(formData.get('role') || 'Home Care Aide').trim(),
       phone: String(formData.get('phone') || '').trim(),
       passwordHash: await hashPassword(password),
+      locationId,
     });
   } catch (err) {
     return { error: err.message || 'Could not create the caregiver.' };
@@ -124,7 +134,7 @@ export async function addCaregiverAction(prevState, formData) {
 // legally gate a first shift: current registry/criminal checks and an I-9
 // on file. The caregiver finishing her own paperwork is not sufficient.
 export async function activateCaregiverAction(caregiverId) {
-  const session = await requireSession(['ADMIN']);
+  const session = await requirePermission('admin.caregivers.manage');
   const state = await db.getOnboardingState(session.organizationId, caregiverId);
   if (!state.readyToActivate) return;
 

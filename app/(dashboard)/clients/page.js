@@ -7,7 +7,7 @@ import Toast from '@/components/Toast';
 export default async function ClientsPage() {
   const session = await getSession();
   if (!session) redirect('/login');
-  const clients = await getClients(session.organizationId);
+  const clients = await getClients(session.organizationId, session.locationId);
 
   return (
     <div>

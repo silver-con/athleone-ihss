@@ -1,5 +1,32 @@
 @import "tailwindcss";
 
+/* Tailwind v4 auto-scans every file in the project for candidate utility
+   classes; this repo has no .git, so its usual .gitignore-based skip of
+   stray binaries doesn't apply, so binary/asset paths are excluded here
+   explicitly as good practice. This is NOT what causes the CSS parse
+   errors seen in `npm run dev` (mangled selectors like a corrupted
+   `bg-[var(--accent-strong)]`, e.g. "Unexpected token Delim") — that is a
+   real bug in tailwindcss/@tailwindcss/postcss 4.3.3's oxide candidate
+   scanner that emits occasional corrupted extra candidates alongside the
+   correct ones. `next build`/`next start` (Turbopack) tolerate it and
+   drop the bad rule; `next dev`'s Turbopack pipeline does not and 500s.
+   Fixed by running dev under webpack instead (see package.json's "dev"
+   script) until upstream fixes the scanner — re-evaluate dropping
+   --webpack when tailwindcss ships a fix past 4.3.3. */
+@source not "**/*.ico";
+@source not "**/*.DS_Store";
+@source not "**/.DS_Store";
+@source not "**/*.png";
+@source not "**/*.jpg";
+@source not "**/*.jpeg";
+@source not "**/*.gif";
+@source not "**/*.webp";
+@source not "**/*.woff";
+@source not "**/*.woff2";
+@source not "**/*.ttf";
+@source not "**/*.pdf";
+@source not "**/*.zip";
+
 :root {
   --bg: oklch(98% 0.008 85);
   --surface: #ffffff;

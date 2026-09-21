@@ -7,7 +7,7 @@ export default async function AdminLayout({ children }) {
 
   return (
     <div className="flex min-h-screen">
-      <AdminSidebar />
+      <AdminSidebar role={session?.role} />
       <main className="flex-1 min-w-0 px-10 py-8">
         {session && (
           <div className="no-print flex items-center justify-end gap-3 mb-4 -mt-2">

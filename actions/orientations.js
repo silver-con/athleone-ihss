@@ -2,11 +2,11 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { requireSession } from '@/actions/auth';
+import { requirePermission } from '@/actions/auth';
 import * as db from '@/lib/queries';
 
 export async function createOrientationAction(formData) {
-  const session = await requireSession(['ADMIN', 'COORDINATOR']);
+  const session = await requirePermission('admin.orientations.manage');
   const clientId = String(formData.get('clientId') || '').trim();
   const caregiverId = String(formData.get('caregiverId') || '').trim();
   const orientationType = String(formData.get('orientationType') || 'initial').trim();
@@ -24,7 +24,7 @@ export async function createOrientationAction(formData) {
 }
 
 export async function completeOrientationAction(formData) {
-  const session = await requireSession(['ADMIN', 'COORDINATOR']);
+  const session = await requirePermission('admin.orientations.manage');
   const orientationId = String(formData.get('orientationId') || '').trim();
   const clientId = String(formData.get('clientId') || '').trim();
 

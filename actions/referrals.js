@@ -2,11 +2,32 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { requireSession } from '@/actions/auth';
+import { requirePermission } from '@/actions/auth';
 import * as db from '@/lib/queries';
 
+export async function createReferralAction(prevState, formData) {
+  const session = await requirePermission('shared.referrals.manage');
+
+  const fields = {};
+  for (const key of [
+    'payer', 'clientName', 'dob', 'service', 'authHours', 'authNumber', 'diagnosis', 'receivedDate',
+  ]) {
+    fields[key] = String(formData.get(key) || '');
+  }
+
+  let referralId;
+  try {
+    referralId = await db.createReferral(session.organizationId, fields);
+  } catch (err) {
+    return { error: err.message || 'Could not create referral.' };
+  }
+
+  revalidatePath('/referrals');
+  redirect(`/referrals/${referralId}`);
+}
+
 export async function submitIntakeAction(prevState, formData) {
-  const session = await requireSession(['COORDINATOR', 'ADMIN']);
+  const session = await requirePermission('shared.referrals.manage');
   const referralId = String(formData.get('referralId') || '');
   if (!formData.get('consent')) {
     return { error: 'Consent is required before an intake can be submitted.' };
@@ -21,6 +42,12 @@ export async function submitIntakeAction(prevState, formData) {
     fields[key] = String(formData.get(key) || '');
   }
   fields.careNeeds = formData.getAll('careNeeds').map(String);
+  // Same rule as hiring: a location admin's intake lands in their own
+  // location regardless of the form, and every intake needs a location.
+  fields.locationId = session.locationId || String(formData.get('locationId') || '').trim() || null;
+  if (!fields.locationId) {
+    return { error: 'Pick the location this client belongs to before submitting the intake.' };
+  }
 
   let result;
   try {

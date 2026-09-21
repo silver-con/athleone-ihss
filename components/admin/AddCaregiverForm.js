@@ -7,7 +7,7 @@ const field =
   'border border-[var(--border)] rounded-lg px-3 py-2 text-[13px] font-body font-normal';
 const labelClass = 'flex flex-col gap-1.5 text-[12.5px] font-display font-bold';
 
-export default function AddCaregiverForm() {
+export default function AddCaregiverForm({ locations = [] }) {
   const [state, formAction, pending] = useActionState(addCaregiverAction, { error: null });
 
   return (
@@ -52,6 +52,15 @@ export default function AddCaregiverForm() {
         <label className={labelClass}>
           Starting password
           <input name="password" type="text" required minLength={8} className={field} />
+        </label>
+        <label className={labelClass}>
+          Location
+          <select name="locationId" defaultValue="" required className={field}>
+            <option value="">Pick a location&hellip;</option>
+            {locations.map((loc) => (
+              <option key={loc.id} value={loc.id}>{loc.name}</option>
+            ))}
+          </select>
         </label>
         <div className="flex items-end">
           <button

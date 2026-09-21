@@ -89,6 +89,9 @@ export default function Home() {
           Backed by a real Postgres database with per-role sign-in — each card above requires
           logging in as that role. See the README for demo credentials.
         </p>
+        <p className="text-center text-[12px] text-[var(--muted)] mt-2">
+          New agency? Accounts are created by Hearth — contact your Hearth representative.
+        </p>
       </div>
     </div>
   );
