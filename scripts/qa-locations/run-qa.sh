@@ -34,8 +34,8 @@ echo "==> schema loaded into $DB_NAME"
 
 # 2. Copy the query layer and rewrite the '@/lib/db' alias, which plain
 #    node can't resolve (Next's tsconfig paths only apply inside Next).
-cp "$REPO/lib/queries.js" "$REPO/lib/db.js" "$WORK/"
-sed -i.bak "s|from '@/lib/db'|from './db.js'|" "$WORK/queries.js" && rm -f "$WORK/queries.js.bak"
+cp "$REPO/lib/queries.js" "$REPO/lib/db.js" "$REPO/lib/data.js" "$WORK/"
+sed -i.bak -e "s|from '@/lib/db'|from './db.js'|" -e "s|from '@/lib/data'|from './data.js'|" "$WORK/queries.js" && rm -f "$WORK/queries.js.bak"
 cp "$QA_DIR/qa.mjs" "$QA_DIR/qa-regression.mjs" "$QA_DIR/qa-roles.mjs" "$QA_DIR/qa-scoping.mjs" "$QA_DIR/qa-referral-create.mjs" "$WORK/"
 printf '{\n  "type": "module"\n}\n' > "$WORK/package.json"
 

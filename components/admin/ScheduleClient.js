@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useActionState } from 'react';
 import Link from 'next/link';
 import { WEEK_DAYS, TODAY_KEY, REASON_CODES } from '@/lib/data';
 import { visitStatusInfo, VISIT_STATUS_ORDER, caregiverStatusInfo } from '@/lib/styles';
+import { createVisitAction } from '@/actions/schedule';
 
 const GRID_COLS = '150px repeat(7, minmax(120px, 1fr))';
 const GRID_MIN_WIDTH = '1050px';
@@ -166,6 +167,8 @@ export default function ScheduleClient({ caregivers, clients, visits }) {
         })}
       </div>
 
+      <ScheduleVisitForm caregivers={caregivers} clients={clients} />
+
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 mt-4">
         {!selected ? (
           <div className="text-[13px] text-[var(--muted)]">
@@ -177,6 +180,91 @@ export default function ScheduleClient({ caregivers, clients, visits }) {
         )}
       </div>
     </div>
+  );
+}
+
+const fieldClass =
+  'border border-[oklch(85%_0.01_85)] rounded-[9px] px-3 py-2 text-[13px] bg-[oklch(99%_0.004_85)] focus:outline-2 focus:outline-[oklch(80%_0.05_175)] focus:border-[oklch(60%_0.08_175)]';
+const labelClass = 'flex flex-col gap-1.5 text-[11.5px] font-display font-bold text-[oklch(45%_0.02_80)]';
+
+function ScheduleVisitForm({ caregivers, clients }) {
+  const [state, formAction, pending] = useActionState(createVisitAction, { error: null, success: null });
+  const schedulable = caregivers.filter((cg) => cg.status !== 'on-leave');
+
+  return (
+    <details className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 mt-6">
+      <summary className="font-display font-extrabold text-[14.5px] cursor-pointer">
+        + Schedule a visit
+      </summary>
+
+      {schedulable.length === 0 || clients.length === 0 ? (
+        <p className="text-[12.5px] text-[var(--muted)] mt-3">
+          {schedulable.length === 0
+            ? 'No caregiver available to schedule — every caregiver here is on leave.'
+            : 'No client to schedule for yet — complete an intake first.'}
+        </p>
+      ) : (
+        <form action={formAction} className="grid grid-cols-2 gap-4 mt-4">
+          <label className={labelClass}>
+            Caregiver
+            <select name="caregiverId" required defaultValue="" className={fieldClass}>
+              <option value="" disabled>Pick a caregiver…</option>
+              {schedulable.map((cg) => (
+                <option key={cg.id} value={cg.id}>{cg.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className={labelClass}>
+            Client
+            <select name="clientId" required defaultValue="" className={fieldClass}>
+              <option value="" disabled>Pick a client…</option>
+              {clients.map((cl) => (
+                <option key={cl.id} value={cl.id}>{cl.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className={labelClass}>
+            Day (current schedule week)
+            <select name="day" required defaultValue={TODAY_KEY} className={fieldClass}>
+              {WEEK_DAYS.map((d) => (
+                <option key={d.key} value={d.key}>{d.label} {d.date}</option>
+              ))}
+            </select>
+          </label>
+          <div className="grid grid-cols-2 gap-4">
+            <label className={labelClass}>
+              Start time
+              <input name="startTime" required placeholder="9:00 AM" className={fieldClass} />
+            </label>
+            <label className={labelClass}>
+              End time
+              <input name="endTime" required placeholder="12:00 PM" className={fieldClass} />
+            </label>
+          </div>
+
+          {state?.error && (
+            <div className="col-span-2 text-[12.5px] font-display font-bold text-[var(--danger)] bg-[oklch(96%_0.03_25)] border border-[oklch(85%_0.08_25)] rounded-xl px-3.5 py-2.5">
+              {state.error}
+            </div>
+          )}
+          {state?.success && (
+            <div className="col-span-2 text-[12.5px] font-display font-bold text-[var(--success)] bg-[var(--success-soft)] rounded-xl px-3.5 py-2.5">
+              {state.success}
+            </div>
+          )}
+
+          <div className="col-span-2 flex justify-end">
+            <button
+              type="submit"
+              disabled={pending}
+              className="bg-[var(--accent-strong)] text-white rounded-[9px] px-4 py-2.5 font-display font-bold text-[12.5px] disabled:opacity-60"
+            >
+              {pending ? 'Scheduling…' : 'Schedule visit'}
+            </button>
+          </div>
+        </form>
+      )}
+    </details>
   );
 }
 

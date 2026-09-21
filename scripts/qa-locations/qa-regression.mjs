@@ -11,6 +11,11 @@ function check(name, cond, detail = '') {
   else { failures.push(`${name}${detail ? ' — ' + detail : ''}`); console.log(`  FAIL  ${name}${detail ? ' — ' + detail : ''}`); }
 }
 function eq(name, a, e) { check(name, a === e, `expected ${JSON.stringify(e)}, got ${JSON.stringify(a)}`); }
+async function throws(name, fn, match) {
+  let msg = null;
+  try { await fn(); } catch (e) { msg = e.message; }
+  check(name, msg !== null && (!match || msg.includes(match)), msg === null ? 'did not throw' : `threw "${msg}"`);
+}
 
 const ORG = 'org-r';
 
@@ -38,6 +43,80 @@ async function run() {
   });
   eq('authorization rate round-trips through the real writer',
     (await db.getActiveAuthorization(ORG, clientId))?.ratePerUnit, 30);
+
+  console.log('\n== units/week auto-derives from hours/week (real authorization notices state hours, not units) ==');
+  const hoursOnlyAuthId = await db.createServiceAuthorization(ORG, {
+    clientId, payer: 'Medicaid', serviceCode: 'S5125', serviceDescription: 'PAS',
+    totalHoursPerWeek: 10, unitMinutes: 15, frequency: 'Weekly', startDate: '09/01/2026',
+    endDate: '12/31/2026', status: 'approved', ratePerUnit: 25,
+  });
+  const hoursOnlyRows = await query(`SELECT total_units_per_week FROM service_authorizations WHERE id = $1`, [hoursOnlyAuthId]);
+  eq('10 hrs/wk at 15-min units derives to 40 units/wk', Number(hoursOnlyRows[0].total_units_per_week), 40);
+
+  const explicitUnitsAuthId = await db.createServiceAuthorization(ORG, {
+    clientId, payer: 'Medicaid', serviceCode: 'S5126', serviceDescription: 'Habilitation',
+    totalHoursPerWeek: 10, totalUnitsPerWeek: 99, unitMinutes: 15, frequency: 'Weekly',
+    startDate: '09/01/2026', endDate: '12/31/2026', status: 'approved', ratePerUnit: 25,
+  });
+  const explicitUnitsRows = await query(`SELECT total_units_per_week FROM service_authorizations WHERE id = $1`, [explicitUnitsAuthId]);
+  eq('an explicit units/week value is never overridden by the derivation', Number(explicitUnitsRows[0].total_units_per_week), 99);
+
+  const neitherAuthId = await db.createServiceAuthorization(ORG, {
+    clientId, payer: 'Medicaid', serviceCode: 'S5127', serviceDescription: 'Respite',
+    unitMinutes: 15, frequency: 'Weekly', startDate: '09/01/2026',
+    endDate: '12/31/2026', status: 'approved', ratePerUnit: 25,
+  });
+  const neitherRows = await query(`SELECT total_units_per_week FROM service_authorizations WHERE id = $1`, [neitherAuthId]);
+  eq('with neither figure supplied, units/week stays null rather than becoming 0', neitherRows[0].total_units_per_week, null);
+
+  console.log('\n== createVisit: the admin \'schedule a visit\' writer (added for the manual-scheduling gap) ==');
+  await throws('rejects a day not on the current schedule week', () =>
+    db.createVisit(ORG, { caregiverId: cg, clientId, day: 'someday', startTime: '9:00 AM', endTime: '11:00 AM' }));
+  await throws('rejects a malformed start time', () =>
+    db.createVisit(ORG, { caregiverId: cg, clientId, day: 'wed', startTime: '9am', endTime: '11:00 AM' }),
+    'must look like');
+  await throws('rejects a malformed end time', () =>
+    db.createVisit(ORG, { caregiverId: cg, clientId, day: 'wed', startTime: '9:00 AM', endTime: 'noon' }),
+    'must look like');
+  await throws('rejects a caregiver id that does not exist', () =>
+    db.createVisit(ORG, { caregiverId: 'nope', clientId, day: 'wed', startTime: '9:00 AM', endTime: '11:00 AM' }),
+    'Caregiver not found');
+  await throws('rejects a client id that does not exist', () =>
+    db.createVisit(ORG, { caregiverId: cg, clientId: 'nope', day: 'wed', startTime: '9:00 AM', endTime: '11:00 AM' }),
+    'Client not found');
+  await throws('a location-scoped call cannot schedule a caregiver outside that location', () =>
+    db.createVisit(ORG, { caregiverId: cg, clientId, day: 'wed', startTime: '9:00 AM', endTime: '11:00 AM' }, 'some-other-location'),
+    'Caregiver not found');
+
+  const scheduledVisitId = await db.createVisit(
+    ORG, { caregiverId: cg, clientId, day: 'wed', startTime: '9:00 AM', endTime: '11:00 AM' }, locId
+  );
+  check('createVisit returns an id', typeof scheduledVisitId === 'string' && scheduledVisitId.length > 0);
+  const scheduled = await db.getVisit(ORG, scheduledVisitId);
+  eq('day stored', scheduled.day, 'wed');
+  eq('service date resolved from the schedule week (not passed in by the caller)', scheduled.serviceDate, '2026-09-16');
+  eq('times stored upper-cased, matching the EVV label format', scheduled.start, '9:00 AM');
+  eq('  ...end time too', scheduled.end, '11:00 AM');
+  eq('status defaults to scheduled', scheduled.status, 'scheduled');
+  eq('no EVV clock-in yet on a freshly scheduled visit', scheduled.evv, null);
+
+  console.log('\n== getOnboardingState: a caregiver must not be stuck forever with no courses set up ==');
+  const freshCg = await db.createCaregiverWithLogin(ORG, {
+    name: 'Fresh Applicant', role: 'Aide', phone: '2', email: 'fresh@x.test', passwordHash: 'x', locationId: locId,
+  });
+  const noCoursesState = await db.getOnboardingState(ORG, freshCg);
+  eq('with zero courses in the library, training is vacuously complete (not a permanent block)',
+    noCoursesState.trainingComplete, true);
+
+  const initialCourseId = await db.createCourse(ORG, { title: 'Orientation', courseType: 'initial' });
+  const notDoneState = await db.getOnboardingState(ORG, freshCg);
+  eq('once a real initial course exists, an uncompleted one blocks training again',
+    notDoneState.trainingComplete, false);
+  eq('  ...progress reports 0 of 1', `${notDoneState.trainingProgress.done}/${notDoneState.trainingProgress.total}`, '0/1');
+
+  await db.markCourseComplete(ORG, freshCg, initialCourseId);
+  const doneState = await db.getOnboardingState(ORG, freshCg);
+  eq('completing the only initial course marks training complete', doneState.trainingComplete, true);
 
   // A 2-hour visit -> 120 min / 15 = 8 units.
   await query(
