@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { getVisit, getClient } from '@/lib/queries';
-import { WEEK_DAYS, REASON_CODES } from '@/lib/data';
+import { getVisit, getClient, getOrganization } from '@/lib/queries';
+import { WEEK_DAYS } from '@/lib/data';
+import { getComplianceProfile } from '@/lib/state-compliance';
 import { visitStatusInfo } from '@/lib/styles';
 import { ClockInButton, ClockOutButton } from '@/components/caregiver/ClockButton';
 import TaskCheckbox from '@/components/caregiver/TaskCheckbox';
@@ -23,7 +24,11 @@ export default async function VisitDetailPage({ params }) {
     );
   }
 
-  const client = await getClient(session.organizationId, visit.clientId);
+  const [client, organization] = await Promise.all([
+    getClient(session.organizationId, visit.clientId),
+    getOrganization(session.organizationId),
+  ]);
+  const reasonCodes = getComplianceProfile(organization?.state)?.reasonCodes || {};
   const info = visitStatusInfo(visit.status);
   const day = WEEK_DAYS.find((d) => d.key === visit.day);
   const canEditTasks = visit.status === 'in-progress' || visit.status === 'completed';
@@ -90,7 +95,7 @@ export default async function VisitDetailPage({ params }) {
             </div>
             {visit.evv.exception && (
               <div className="mt-1 bg-[var(--danger-soft)] text-[var(--danger)] rounded-[10px] px-3 py-2.5 text-[12.5px] font-display font-semibold">
-                Code {visit.evv.exception} — {REASON_CODES[visit.evv.exception]?.label || 'Unknown reason code'}
+                Code {visit.evv.exception} — {reasonCodes[visit.evv.exception]?.label || 'Unknown reason code'}
               </div>
             )}
           </div>

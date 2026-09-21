@@ -20,9 +20,10 @@ import * as db from '@/lib/queries';
 export async function updateProviderInfoAction(formData) {
   const session = await requirePermission('admin.onboarding.manage');
   await db.updateOrganizationOnboarding(session.organizationId, {
-    texasMedicaidProviderNumber: String(formData.get('texasMedicaidProviderNumber') || '').trim() || null,
+    state: String(formData.get('state') || '').trim().toUpperCase() || null,
+    medicaidProviderNumber: String(formData.get('medicaidProviderNumber') || '').trim() || null,
     npi: String(formData.get('npi') || '').trim() || null,
-    hcssaLicenseNumber: String(formData.get('hcssaLicenseNumber') || '').trim() || null,
+    stateLicenseNumber: String(formData.get('stateLicenseNumber') || '').trim() || null,
   });
   revalidatePath('/admin/onboarding');
 }

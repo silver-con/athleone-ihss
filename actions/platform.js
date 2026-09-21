@@ -47,9 +47,10 @@ export async function createOrganizationAction(prevState, formData) {
   const adminName = String(formData.get('adminName') || '').trim();
   const email = String(formData.get('email') || '').trim().toLowerCase();
   const password = String(formData.get('password') || '');
-  const texasMedicaidProviderNumber = String(formData.get('texasMedicaidProviderNumber') || '').trim();
+  const state = String(formData.get('state') || '').trim().toUpperCase();
+  const medicaidProviderNumber = String(formData.get('medicaidProviderNumber') || '').trim();
   const npi = String(formData.get('npi') || '').trim();
-  const hcssaLicenseNumber = String(formData.get('hcssaLicenseNumber') || '').trim();
+  const stateLicenseNumber = String(formData.get('stateLicenseNumber') || '').trim();
 
   if (!organizationName || !adminName || !email || !password) {
     return { error: 'Agency name, admin name, email, and a starting password are all required.', success: null };
@@ -66,9 +67,10 @@ export async function createOrganizationAction(prevState, formData) {
       adminName,
       email,
       passwordHash,
-      texasMedicaidProviderNumber,
+      state,
+      medicaidProviderNumber,
       npi,
-      hcssaLicenseNumber,
+      stateLicenseNumber,
     });
   } catch (err) {
     return { error: err.message || 'Could not create this agency. Please try again.', success: null };

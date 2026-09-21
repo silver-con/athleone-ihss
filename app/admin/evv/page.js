@@ -1,21 +1,24 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { getVisits, getClients, getCaregivers } from '@/lib/queries';
+import { getVisits, getClients, getCaregivers, getOrganization } from '@/lib/queries';
 import StatTile from '@/components/StatTile';
 import StatusBar from '@/components/charts/StatusBar';
 import ExceptionActionButton from '@/components/admin/ExceptionActionButton';
-import { WEEK_DAYS, REASON_CODES } from '@/lib/data';
+import { WEEK_DAYS } from '@/lib/data';
+import { getComplianceProfile } from '@/lib/state-compliance';
 import { visitStatusInfo, VISIT_STATUS_ORDER } from '@/lib/styles';
 
 export default async function EvvPage() {
   const session = await getSession();
   if (!session) redirect('/login');
-  const [allVisits, clients, caregivers] = await Promise.all([
+  const [allVisits, clients, caregivers, organization] = await Promise.all([
     getVisits(session.organizationId, session.locationId),
     getClients(session.organizationId, session.locationId),
     getCaregivers(session.organizationId, session.locationId),
+    getOrganization(session.organizationId),
   ]);
+  const reasonCodes = getComplianceProfile(organization?.state)?.reasonCodes || {};
 
   // This page is scoped to the current week's schedule; older backlog
   // visits (`day: null`) live on the Compliance Center's maintenance queue
@@ -61,7 +64,7 @@ export default async function EvvPage() {
           href="/admin/compliance"
           className="shrink-0 text-[12.5px] font-display font-bold text-white bg-[var(--accent-strong)] px-3.5 py-2 rounded-[10px]"
         >
-          Texas EVV Compliance Center →
+          EVV Compliance Center →
         </Link>
       </div>
 
@@ -142,7 +145,7 @@ export default async function EvvPage() {
                 ) : (
                   <div className="flex flex-col gap-1.5 items-start">
                     <span className="text-[12px] text-[var(--danger)] font-display font-semibold leading-snug">
-                      Code {v.evv.exception} — {REASON_CODES[v.evv.exception]?.label || 'Unknown reason code'}
+                      Code {v.evv.exception} — {reasonCodes[v.evv.exception]?.label || 'Unknown reason code'}
                     </span>
                     {v.resolved ? (
                       <span className="text-[11.5px] font-display font-bold text-[var(--success)]">Reviewed ✓</span>

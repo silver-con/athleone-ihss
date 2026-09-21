@@ -7,6 +7,7 @@ import {
   updateProviderEnrollmentAction,
   updateBaaSignedAction,
 } from '@/actions/tenant-onboarding';
+import { US_STATES } from '@/lib/data';
 
 // Tenant onboarding go-live checklist — architecture spec §5 / §7 Phase 3,
 // scoped to just the wizard/checklist: no platform/vendor-ops role, no
@@ -64,7 +65,7 @@ export default async function AdminOnboardingPage({ searchParams }) {
   ]);
 
   const providerInfoDone = Boolean(
-    organization?.texasMedicaidProviderNumber && organization?.npi && organization?.hcssaLicenseNumber
+    organization?.medicaidProviderNumber && organization?.npi && organization?.stateLicenseNumber
   );
   const enrollmentDone = Boolean(organization?.providerEnrollmentAttested);
   const baaDone = Boolean(organization?.baaSigned);
@@ -79,9 +80,9 @@ export default async function AdminOnboardingPage({ searchParams }) {
     <div className="max-w-[820px]">
       <h1 className="font-display font-extrabold text-[24px]">Setup &amp; go-live checklist</h1>
       <p className="text-[13.5px] text-[var(--muted)] mt-1">
-        Everything {organization?.name || 'your agency'} needs before Texas EVV transmission goes live —
-        most of this can be finished whenever you&rsquo;re ready, and nothing here blocks you from using
-        the rest of Hearth in the meantime.
+        Everything {organization?.name || 'your agency'} needs before EVV transmission goes live — most of
+        this can be finished whenever you&rsquo;re ready, and nothing here blocks you from using the rest
+        of Hearth in the meantime.
       </p>
 
       {params?.justCreated && (
@@ -112,15 +113,27 @@ export default async function AdminOnboardingPage({ searchParams }) {
 
         <StepCard n={2} title="Provider info on file" done={providerInfoDone}>
           <p className="text-[12.5px] text-[var(--muted)] mt-1 mb-3">
-            Your Texas Medicaid provider number (TPI), NPI, and HCSSA license number &mdash; recorded here,
-            not verified by Hearth.
+            Your state, Medicaid provider number, NPI, and state home-care license number &mdash; recorded
+            here, not verified by Hearth.
           </p>
-          <form action={updateProviderInfoAction} className="grid grid-cols-3 gap-3">
+          <form action={updateProviderInfoAction} className="grid grid-cols-4 gap-3">
             <label className="flex flex-col gap-1 text-[11.5px] font-display font-bold text-[var(--muted)]">
-              Medicaid provider # (TPI)
+              State
+              <select
+                name="state"
+                defaultValue={organization?.state || 'TX'}
+                className="border border-[var(--border)] rounded-lg px-3 py-2 text-[13px] font-body font-normal"
+              >
+                {US_STATES.map((s) => (
+                  <option key={s.code} value={s.code}>{s.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[11.5px] font-display font-bold text-[var(--muted)]">
+              Medicaid provider #
               <input
-                name="texasMedicaidProviderNumber"
-                defaultValue={organization?.texasMedicaidProviderNumber || ''}
+                name="medicaidProviderNumber"
+                defaultValue={organization?.medicaidProviderNumber || ''}
                 className="border border-[var(--border)] rounded-lg px-3 py-2 text-[13px] font-body font-normal"
               />
             </label>
@@ -133,14 +146,14 @@ export default async function AdminOnboardingPage({ searchParams }) {
               />
             </label>
             <label className="flex flex-col gap-1 text-[11.5px] font-display font-bold text-[var(--muted)]">
-              HCSSA license #
+              State license #
               <input
-                name="hcssaLicenseNumber"
-                defaultValue={organization?.hcssaLicenseNumber || ''}
+                name="stateLicenseNumber"
+                defaultValue={organization?.stateLicenseNumber || ''}
                 className="border border-[var(--border)] rounded-lg px-3 py-2 text-[13px] font-body font-normal"
               />
             </label>
-            <div className="col-span-3">
+            <div className="col-span-4">
               <button type="submit" className="bg-[var(--accent-strong)] text-white font-display font-bold text-[12.5px] px-4 py-2 rounded-[10px]">
                 Save provider info
               </button>

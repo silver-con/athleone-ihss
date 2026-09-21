@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/actions/auth';
 import * as db from '@/lib/queries';
 import { encryptSecret } from '@/lib/secrets';
-import { testConnection, clearTokenCache } from '@/lib/hhaexchange';
+import { getEvvAdapter } from '@/lib/evv-adapters';
 import { runSyncCycle } from '@/lib/evv-sync';
 
 // Saving credentials keeps the existing secret if the field is left blank,
@@ -33,13 +33,14 @@ export async function saveEvvCredentialsAction(prevState, formData) {
       officeIdentifier: String(formData.get('officeIdentifier') || '').trim() || null,
       payerId: String(formData.get('payerId') || '').trim() || null,
       environment: String(formData.get('environment') || 'sandbox').trim(),
+      aggregator: existing?.aggregator || 'hhaexchange',
       status: existing?.status && existing.status !== 'not_started' ? existing.status : 'testing',
     });
   } catch (err) {
     return { error: err.message || 'Could not save the credentials.' };
   }
 
-  clearTokenCache(session.organizationId);
+  getEvvAdapter(existing?.aggregator || 'hhaexchange').clearTokenCache(session.organizationId);
   revalidatePath('/admin/evv/sync');
   return { saved: true, error: null };
 }
@@ -49,7 +50,7 @@ export async function testEvvConnectionAction() {
   const credentials = await db.getEvvCredentials(session.organizationId);
   if (!credentials) return { ok: false, error: 'No credentials saved yet.' };
 
-  const result = await testConnection(credentials);
+  const result = await getEvvAdapter(credentials.aggregator || 'hhaexchange').testConnection(credentials);
   if (result.ok) {
     await db.setEvvCredentialStatus(session.organizationId, credentials.status, {
       touchSuccess: true,

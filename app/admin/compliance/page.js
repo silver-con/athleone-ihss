@@ -1,24 +1,17 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { getVisits, getClients, getCaregivers } from '@/lib/queries';
+import { getVisits, getClients, getCaregivers, getOrganization } from '@/lib/queries';
 import BarChart from '@/components/charts/BarChart';
 import ExceptionActionButton from '@/components/admin/ExceptionActionButton';
-import {
-  CURES_ACT_ELEMENTS,
-  VISIT_MAINTENANCE_WINDOW_DAYS,
-  EVV_USAGE_THRESHOLD,
-  EVV_ENFORCEMENT_LADDER,
-  evvUsageHistory,
-  REASON_CODES,
-  TODAY_ISO,
-} from '@/lib/data';
+import { CURES_ACT_ELEMENTS, TODAY_ISO } from '@/lib/data';
+import { getComplianceProfile } from '@/lib/state-compliance';
 import { maintenanceUrgency } from '@/lib/styles';
 
-function daysRemaining(serviceDate) {
+function daysRemaining(serviceDate, windowDays) {
   const service = new Date(serviceDate + 'T00:00:00');
   const today = new Date(TODAY_ISO + 'T00:00:00');
   const elapsed = Math.round((today - service) / 86400000);
-  return VISIT_MAINTENANCE_WINDOW_DAYS - elapsed;
+  return windowDays - elapsed;
 }
 
 function formatServiceDate(iso) {
@@ -29,17 +22,40 @@ function formatServiceDate(iso) {
 export default async function CompliancePage() {
   const session = await getSession();
   if (!session) redirect('/login');
-  const [visits, clients, caregivers] = await Promise.all([
+  const [visits, clients, caregivers, organization] = await Promise.all([
     getVisits(session.organizationId, session.locationId),
     getClients(session.organizationId, session.locationId),
     getCaregivers(session.organizationId, session.locationId),
+    getOrganization(session.organizationId),
   ]);
 
-  const currentQuarter = evvUsageHistory[evvUsageHistory.length - 1];
+  const profile = getComplianceProfile(organization?.state);
+
+  // No profile configured for this tenant's state yet — an honest "not
+  // built yet" notice, not a silent fallback to Texas's numbers (see
+  // lib/state-compliance.js's comment on getComplianceProfile). Today
+  // this only fires for a state other than TX, since that's the only
+  // profile that exists.
+  if (!profile) {
+    return (
+      <div>
+        <h1 className="font-display font-extrabold text-[24px]">EVV Compliance Center</h1>
+        <p className="text-[13.5px] text-[var(--muted)] mt-1 max-w-[720px]">
+          {organization?.name || 'Your agency'} is registered in{' '}
+          {organization?.state || 'a state Hearth doesn&rsquo;t recognize'}, and Hearth doesn&rsquo;t yet
+          have that state&rsquo;s EVV compliance figures (usage threshold, enforcement ladder, reason
+          codes) configured here — Texas is the only state built out so far. Reach out to your Hearth
+          contact to get {organization?.state || 'your state'} added.
+        </p>
+      </div>
+    );
+  }
+
+  const currentQuarter = profile.usageHistory[profile.usageHistory.length - 1];
   const nonCompliantStreak = (() => {
     let streak = 0;
-    for (let i = evvUsageHistory.length - 1; i >= 0; i--) {
-      if (evvUsageHistory[i].score < EVV_USAGE_THRESHOLD) streak++;
+    for (let i = profile.usageHistory.length - 1; i >= 0; i--) {
+      if (profile.usageHistory[i].score < profile.usageThreshold) streak++;
       else break;
     }
     return streak;
@@ -47,7 +63,7 @@ export default async function CompliancePage() {
 
   const maintenanceQueue = visits
     .filter((v) => v.evv?.exception && !v.resolved)
-    .map((v) => ({ ...v, remaining: daysRemaining(v.serviceDate) }))
+    .map((v) => ({ ...v, remaining: daysRemaining(v.serviceDate, profile.visitMaintenanceWindowDays) }))
     .sort((a, b) => a.remaining - b.remaining);
 
   const closedOutQueue = visits.filter(
@@ -56,11 +72,12 @@ export default async function CompliancePage() {
 
   return (
     <div>
-      <h1 className="font-display font-extrabold text-[24px]">Texas EVV Compliance Center</h1>
+      <h1 className="font-display font-extrabold text-[24px]">{profile.stateName} EVV Compliance Center</h1>
       <p className="text-[13.5px] text-[var(--muted)] mt-1 max-w-[720px]">
-        Modeled on the Texas HHSC Electronic Visit Verification Policy Handbook (HHAeXchange as the
-        state EVV aggregator). Figures below reflect currently published policy — HHSC revises this
-        handbook periodically, so treat exact numbers as &ldquo;as published,&rdquo; not guaranteed-current law.
+        Modeled on {profile.stateName}&rsquo;s published EVV policy handbook ({profile.defaultAggregator} as
+        the state EVV aggregator). Figures below reflect currently published policy — the state revises
+        this handbook periodically, so treat exact numbers as &ldquo;as published,&rdquo; not
+        guaranteed-current law.
       </p>
 
       {/* EVV Usage Score */}
@@ -68,13 +85,13 @@ export default async function CompliancePage() {
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6">
           <div className="font-display font-extrabold text-[14.5px] mb-1">EVV Usage Score</div>
           <p className="text-[12px] text-[var(--muted)] mb-4">
-            Required minimum: {EVV_USAGE_THRESHOLD}% per fiscal quarter
+            Required minimum: {profile.usageThreshold}% per fiscal quarter
           </p>
           <div className="flex items-end gap-2 mb-1">
             <div
               className={
                 'font-display font-extrabold text-[34px] leading-none ' +
-                (currentQuarter.score >= EVV_USAGE_THRESHOLD ? 'text-[var(--success)]' : 'text-[var(--danger)]')
+                (currentQuarter.score >= profile.usageThreshold ? 'text-[var(--success)]' : 'text-[var(--danger)]')
               }
             >
               {currentQuarter.score}%
@@ -84,22 +101,22 @@ export default async function CompliancePage() {
           <span
             className={
               'inline-block text-[11px] font-display font-bold px-2.5 py-1 rounded-full ' +
-              (currentQuarter.score >= EVV_USAGE_THRESHOLD
+              (currentQuarter.score >= profile.usageThreshold
                 ? 'bg-[var(--success-soft)] text-[var(--success)]'
                 : 'bg-[var(--danger-soft)] text-[var(--danger)]')
             }
           >
-            {currentQuarter.score >= EVV_USAGE_THRESHOLD ? 'Compliant' : 'Below threshold'}
+            {currentQuarter.score >= profile.usageThreshold ? 'Compliant' : 'Below threshold'}
           </span>
         </div>
 
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6">
           <div className="font-display font-extrabold text-[14.5px] mb-4">Usage score by quarter</div>
           <BarChart
-            data={evvUsageHistory.map((q) => ({ label: q.quarter, value: q.score }))}
+            data={profile.usageHistory.map((q) => ({ label: q.quarter, value: q.score }))}
             unit="%"
             scaleMax={100}
-            threshold={EVV_USAGE_THRESHOLD}
+            threshold={profile.usageThreshold}
           />
         </div>
       </div>
@@ -113,7 +130,7 @@ export default async function CompliancePage() {
             : `${nonCompliantStreak} consecutive non-compliant quarter(s) — see the current tier below.`}
         </p>
         <div className="grid grid-cols-3 gap-3">
-          {EVV_ENFORCEMENT_LADDER.map((tier) => {
+          {profile.enforcementLadder.map((tier) => {
             const active = tier.tier === nonCompliantStreak;
             return (
               <div
@@ -142,8 +159,8 @@ export default async function CompliancePage() {
           The 6 required EVV data elements
         </div>
         <p className="text-[12.5px] text-[var(--muted)] mb-4">
-          Federal 21st Century Cures Act, Sec. 12006 — every state&rsquo;s EVV program, Texas included, is
-          built around capturing these six elements on every visit.
+          Federal 21st Century Cures Act, Sec. 12006 — every state&rsquo;s EVV program, {profile.stateName}{' '}
+          included, is built around capturing these six elements on every visit.
         </p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
           {CURES_ACT_ELEMENTS.map((el) => (
@@ -164,7 +181,7 @@ export default async function CompliancePage() {
         <div className="flex items-baseline justify-between">
           <div className="font-display font-extrabold text-[14.5px] mb-1">Visit maintenance queue</div>
           <p className="text-[12px] text-[var(--muted)]">
-            {VISIT_MAINTENANCE_WINDOW_DAYS}-day window to correct a visit before it locks
+            {profile.visitMaintenanceWindowDays}-day window to correct a visit before it locks
           </p>
         </div>
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden mt-2">
@@ -197,7 +214,7 @@ export default async function CompliancePage() {
                   <div className="text-[12px] text-[var(--muted)]">{formatServiceDate(v.serviceDate)}</div>
                   <div>
                     <div className="text-[12.5px] font-display font-semibold">
-                      {v.evv.exception} — {REASON_CODES[v.evv.exception]?.label}
+                      {v.evv.exception} — {profile.reasonCodes[v.evv.exception]?.label}
                     </div>
                     {v.evv.note && (
                       <div className="text-[11.5px] text-[var(--muted)] mt-0.5 leading-snug">{v.evv.note}</div>
@@ -234,7 +251,7 @@ export default async function CompliancePage() {
             <div>Meaning</div>
             <div>Note required</div>
           </div>
-          {Object.entries(REASON_CODES).map(([code, info]) => (
+          {Object.entries(profile.reasonCodes).map(([code, info]) => (
             <div
               key={code}
               className="grid grid-cols-[0.6fr_2fr_1fr] px-5 py-2.5 text-[13px] items-center border-b border-[oklch(93%_0.01_85)] last:border-none"

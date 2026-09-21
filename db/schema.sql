@@ -26,21 +26,30 @@
 --
 -- SCHEMA DRIFT WARNING: same class of issue as the DocuSign signed_via/
 -- envelope_id columns before it — CREATE TABLE IF NOT EXISTS is a no-op
--- against a pre-existing organizations table, so these three columns will
--- NOT retroactively appear on a real dev database via `npm run db:setup`.
--- If you have a pre-existing dev database and want to keep its data, run:
---   ALTER TABLE organizations
---     ADD COLUMN IF NOT EXISTS provider_enrollment_attested boolean NOT NULL DEFAULT false,
---     ADD COLUMN IF NOT EXISTS baa_signed boolean NOT NULL DEFAULT false,
---     ADD COLUMN IF NOT EXISTS baa_signed_at timestamptz;
+-- against a pre-existing organizations table, so none of these columns
+-- will retroactively appear on a real dev database via `npm run db:setup`.
+-- If you have a pre-existing dev database and want to keep its data, run
+-- scripts/migrate-2026-09-21-multi-state.mjs (idempotent, safe to re-run)
+-- rather than hand-applying ALTERs here — it also handles the
+-- texas_medicaid_provider_number / hcssa_license_number renames below,
+-- which a plain ADD COLUMN IF NOT EXISTS can't express.
 -- Otherwise, for a disposable local/dev database: dropdb hearth && createdb
 -- hearth && npm run db:setup && npm run db:seed.
+--
+-- state / medicaid_provider_number / state_license_number generalize what
+-- used to be Texas-only columns (state was implicitly always Texas;
+-- texas_medicaid_provider_number and hcssa_license_number were named
+-- after Texas's own provider-identifier terms) now that an agency can be
+-- registered in any state — see multi-state-expansion-architecture-spec.md
+-- (the project doc). 'TX' stays the default since every tenant on this
+-- system today is a Texas agency.
 CREATE TABLE IF NOT EXISTS organizations (
   id                            text PRIMARY KEY,
   name                          text NOT NULL,
-  texas_medicaid_provider_number text,
+  state                         text NOT NULL DEFAULT 'TX',
+  medicaid_provider_number      text,
   npi                           text,
-  hcssa_license_number          text,
+  state_license_number          text,
   provider_enrollment_attested  boolean NOT NULL DEFAULT false,
   baa_signed                    boolean NOT NULL DEFAULT false,
   baa_signed_at                 timestamptz,
@@ -289,6 +298,11 @@ CREATE INDEX IF NOT EXISTS idx_platform_admin_log_admin ON platform_admin_access
 -- provider identity. client_id/client_secret are stored encrypted
 -- (AES-256-GCM, see lib/secrets.js) and are never returned to the browser
 -- or written to logs.
+-- aggregator: which EVV vendor this tenant transmits to (resolved by
+-- lib/evv-adapters/index.js's getEvvAdapter()). Defaults to 'hhaexchange'
+-- since that's Texas's HHSC-mandated aggregator and the only adapter
+-- implemented so far — a state on a different vendor sets its own value
+-- here rather than Hearth guessing from the tenant's state.
 CREATE TABLE IF NOT EXISTS organization_evv_credentials (
   organization_id   text PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
   api_base_url      text NOT NULL,
@@ -301,6 +315,7 @@ CREATE TABLE IF NOT EXISTS organization_evv_credentials (
   office_identifier text,
   payer_id          text,
   environment       text NOT NULL DEFAULT 'sandbox' CHECK (environment IN ('sandbox', 'production')),
+  aggregator        text NOT NULL DEFAULT 'hhaexchange',
   status            text NOT NULL DEFAULT 'not_started' CHECK (status IN ('not_started', 'testing', 'passed', 'live', 'disabled')),
   last_success_at   timestamptz,
   created_at        timestamptz NOT NULL DEFAULT now()

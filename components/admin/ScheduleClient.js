@@ -2,7 +2,7 @@
 
 import { useState, useActionState } from 'react';
 import Link from 'next/link';
-import { WEEK_DAYS, TODAY_KEY, REASON_CODES } from '@/lib/data';
+import { WEEK_DAYS, TODAY_KEY } from '@/lib/data';
 import { visitStatusInfo, VISIT_STATUS_ORDER, caregiverStatusInfo } from '@/lib/styles';
 import { createVisitAction } from '@/actions/schedule';
 
@@ -13,7 +13,7 @@ function clientName(clients, id) {
   return clients.find((c) => c.id === id)?.name || 'Unknown client';
 }
 
-export default function ScheduleClient({ caregivers, clients, visits }) {
+export default function ScheduleClient({ caregivers, clients, visits, reasonCodes = {} }) {
   const [selectedId, setSelectedId] = useState(null);
 
   const selected = visits.find((v) => v.id === selectedId) || null;
@@ -326,7 +326,7 @@ function VisitDetail({ visit, caregivers, clients }) {
 
             {visit.evv.exception && (
               <div className="col-span-2 mt-1 bg-[var(--danger-soft)] text-[var(--danger)] rounded-[10px] px-3 py-2.5 text-[12.5px] font-display font-semibold">
-                Code {visit.evv.exception} — {REASON_CODES[visit.evv.exception]?.label || 'Unknown reason code'}
+                Code {visit.evv.exception} — {reasonCodes[visit.evv.exception]?.label || 'Unknown reason code'}
               </div>
             )}
           </div>

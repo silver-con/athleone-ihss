@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react';
 import { createOrganizationAction } from '@/actions/platform';
+import { US_STATES } from '@/lib/data';
 
 const field =
   'border border-[var(--border)] rounded-lg px-3 py-2 text-[13px] font-body font-normal';
@@ -56,18 +57,25 @@ export default function CreateOrganizationForm() {
           Starting password
           <input name="password" type="text" required minLength={8} className={field} />
         </label>
-        <div />
         <label className={labelClass}>
-          Texas Medicaid provider number (optional)
-          <input name="texasMedicaidProviderNumber" className={field} />
+          State
+          <select name="state" defaultValue="TX" className={field}>
+            {US_STATES.map((s) => (
+              <option key={s.code} value={s.code}>{s.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className={labelClass}>
+          Medicaid provider number (optional)
+          <input name="medicaidProviderNumber" className={field} />
         </label>
         <label className={labelClass}>
           NPI (optional)
           <input name="npi" className={field} />
         </label>
         <label className={labelClass}>
-          HCSSA license number (optional)
-          <input name="hcssaLicenseNumber" className={field} />
+          State license number (optional)
+          <input name="stateLicenseNumber" className={field} />
         </label>
         <div className="flex items-end col-span-2">
           <button

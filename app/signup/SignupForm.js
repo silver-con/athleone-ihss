@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react';
 import { signupAction } from '@/actions/signup';
+import { US_STATES } from '@/lib/data';
 
 const initialState = { error: null };
 
@@ -91,14 +92,29 @@ export default function SignupForm() {
         <summary className="text-[12.5px] font-display font-bold text-[var(--muted)] cursor-pointer">
           Provider info (optional &mdash; can add later)
         </summary>
-        <div className="grid grid-cols-3 gap-3 mt-3">
+        <div className="grid grid-cols-2 gap-3 mt-3">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="texasMedicaidProviderNumber" className="text-[11.5px] font-display font-bold text-[var(--muted)]">
-              Medicaid provider # (TPI)
+            <label htmlFor="state" className="text-[11.5px] font-display font-bold text-[var(--muted)]">
+              State
+            </label>
+            <select
+              id="state"
+              name="state"
+              defaultValue="TX"
+              className="border border-[var(--border)] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+            >
+              {US_STATES.map((s) => (
+                <option key={s.code} value={s.code}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="medicaidProviderNumber" className="text-[11.5px] font-display font-bold text-[var(--muted)]">
+              Medicaid provider #
             </label>
             <input
-              id="texasMedicaidProviderNumber"
-              name="texasMedicaidProviderNumber"
+              id="medicaidProviderNumber"
+              name="medicaidProviderNumber"
               type="text"
               className="border border-[var(--border)] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             />
@@ -115,12 +131,12 @@ export default function SignupForm() {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="hcssaLicenseNumber" className="text-[11.5px] font-display font-bold text-[var(--muted)]">
-              HCSSA license #
+            <label htmlFor="stateLicenseNumber" className="text-[11.5px] font-display font-bold text-[var(--muted)]">
+              State home-care license #
             </label>
             <input
-              id="hcssaLicenseNumber"
-              name="hcssaLicenseNumber"
+              id="stateLicenseNumber"
+              name="stateLicenseNumber"
               type="text"
               className="border border-[var(--border)] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             />
