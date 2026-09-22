@@ -291,6 +291,38 @@ CREATE TABLE IF NOT EXISTS platform_admin_access_log (
 
 CREATE INDEX IF NOT EXISTS idx_platform_admin_log_admin ON platform_admin_access_log(platform_admin_id);
 
+-- TENANT-SIDE AUDIT TRAIL
+--
+-- One level down from platform_admin_access_log above: that table only
+-- ever covers Hearth's own platform-ops staff, this one covers what a
+-- tenant's own ADMIN/LOCATION_ADMIN/COORDINATOR users do inside their
+-- organization. Scope deliberately started narrow (see lib/queries.js's
+-- logAuditEvent callers) rather than instrumenting every mutation at
+-- once: a client's care plan (service authorizations), billing line
+-- changes, and this tenant's own EVV credentials — the three examples
+-- named in enterprise-readiness-roadmap.md's audit-trail item, and
+-- usually the first things a security review asks to see logged.
+-- actor_user_id is nullable (ON DELETE SET NULL) so a row survives even
+-- if the user who performed the action is later removed; actor_name/role
+-- are duplicated onto the row itself for the same reason platform admin
+-- logging does — history stays legible without a join. Never write a
+-- secret value (client id/secret, password) into `detail`.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id              text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  actor_user_id   text REFERENCES users(id) ON DELETE SET NULL,
+  actor_name      text NOT NULL,
+  actor_role      text NOT NULL,
+  location_id     text REFERENCES locations(id) ON DELETE SET NULL,
+  action          text NOT NULL,
+  entity_type     text NOT NULL,
+  entity_id       text,
+  detail          text,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_org ON audit_log(organization_id, created_at DESC);
+
 -- EVV AGGREGATOR INTEGRATION (HHAeXchange)
 --
 -- Credentials are per tenant, never global: each agency authenticates to

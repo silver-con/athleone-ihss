@@ -173,6 +173,19 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    href: '/admin/audit-log',
+    label: 'Audit Log',
+    permission: 'admin.auditLog.view',
+    match: (path) => path.startsWith('/admin/audit-log'),
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 3.5h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1Z" />
+        <path d="M14.5 3.5V8h4.5" />
+        <path d="M8.2 12.2l1.9 1.9 5.2-5.4" />
+      </svg>
+    ),
+  },
 ];
 
 // `role` comes from the server layout — this is a client component, so it

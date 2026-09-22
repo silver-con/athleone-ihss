@@ -36,7 +36,7 @@ echo "==> schema loaded into $DB_NAME"
 #    node can't resolve (Next's tsconfig paths only apply inside Next).
 cp "$REPO/lib/queries.js" "$REPO/lib/db.js" "$REPO/lib/data.js" "$REPO/lib/state-compliance.js" "$REPO/lib/evv-mapping.js" "$REPO/lib/permissions.js" "$WORK/"
 sed -i.bak   -e "s|from '@/lib/db'|from './db.js'|"   -e "s|from '@/lib/data'|from './data.js'|"   -e "s|from '@/lib/state-compliance'|from './state-compliance.js'|"   "$WORK/queries.js" "$WORK/evv-mapping.js" && rm -f "$WORK"/*.bak
-cp "$QA_DIR/qa.mjs" "$QA_DIR/qa-regression.mjs" "$QA_DIR/qa-roles.mjs" "$QA_DIR/qa-scoping.mjs" "$QA_DIR/qa-referral-create.mjs" "$QA_DIR/qa-multi-state.mjs" "$QA_DIR/qa-platform-dashboard.mjs" "$QA_DIR/qa-admin-dashboard.mjs" "$WORK/"
+cp "$QA_DIR/qa.mjs" "$QA_DIR/qa-regression.mjs" "$QA_DIR/qa-roles.mjs" "$QA_DIR/qa-scoping.mjs" "$QA_DIR/qa-referral-create.mjs" "$QA_DIR/qa-multi-state.mjs" "$QA_DIR/qa-platform-dashboard.mjs" "$QA_DIR/qa-admin-dashboard.mjs" "$QA_DIR/qa-audit-log.mjs" "$WORK/"
 printf '{\n  "type": "module"\n}\n' > "$WORK/package.json"
 
 # 3. Reuse the repo's own installed pg driver rather than re-downloading.
@@ -46,7 +46,7 @@ else
   (cd "$WORK" && npm install pg --silent)
 fi
 
-# 4. Run all eight suites.
+# 4. Run all nine suites.
 # Socket-form URL so this honours the same PGHOST/PGPORT/PGUSER that
 # createdb/psql above already used — no assumptions about TCP or ports.
 export DATABASE_URL="postgresql:///$DB_NAME"
@@ -66,6 +66,8 @@ psql -q -d "$DB_NAME" -c "TRUNCATE organizations CASCADE;" 2>/dev/null
 (cd "$WORK" && node qa-platform-dashboard.mjs) || STATUS=1
 psql -q -d "$DB_NAME" -c "TRUNCATE organizations CASCADE;" 2>/dev/null
 (cd "$WORK" && node qa-admin-dashboard.mjs) || STATUS=1
+psql -q -d "$DB_NAME" -c "TRUNCATE organizations CASCADE;" 2>/dev/null
+(cd "$WORK" && node qa-audit-log.mjs) || STATUS=1
 
 # 5. Clean up the scratch database.
 dropdb --if-exists "$DB_NAME"

@@ -41,6 +41,20 @@ export async function saveEvvCredentialsAction(prevState, formData) {
   }
 
   getEvvAdapter(existing?.aggregator || 'hhaexchange').clearTokenCache(session.organizationId);
+
+  // Never log the actual client id/secret values — just that credentials
+  // were touched and which non-secret fields this save carried.
+  await db.logAuditEvent(session.organizationId, {
+    actorUserId: session.userId,
+    actorName: session.name,
+    actorRole: session.role,
+    locationId: session.locationId,
+    action: existing ? 'update_evv_credentials' : 'create_evv_credentials',
+    entityType: 'evv_credentials',
+    entityId: session.organizationId,
+    detail: `${clientId ? 'client id changed; ' : ''}${clientSecret ? 'client secret changed; ' : ''}environment ${String(formData.get('environment') || 'sandbox').trim()}`,
+  });
+
   revalidatePath('/admin/evv/sync');
   return { saved: true, error: null };
 }

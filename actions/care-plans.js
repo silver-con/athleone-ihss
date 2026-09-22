@@ -21,12 +21,14 @@ export async function createAuthorizationAction(formData) {
   const session = await requirePermission('admin.carePlans.manage');
   const clientId = String(formData.get('clientId') || '').trim();
 
-  await db.createServiceAuthorization(session.organizationId, {
+  const serviceCode = String(formData.get('serviceCode') || '').trim();
+
+  const authorizationId = await db.createServiceAuthorization(session.organizationId, {
     clientId,
     payer: String(formData.get('payer') || '').trim(),
     caseId: String(formData.get('caseId') || '').trim() || null,
     referenceNumber: String(formData.get('referenceNumber') || '').trim() || null,
-    serviceCode: String(formData.get('serviceCode') || '').trim(),
+    serviceCode,
     serviceDescription: String(formData.get('serviceDescription') || '').trim(),
     modifierCodes: String(formData.get('modifierCodes') || '').trim() || null,
     diagnosisCode: String(formData.get('diagnosisCode') || '').trim() || null,
@@ -42,6 +44,17 @@ export async function createAuthorizationAction(formData) {
     status: String(formData.get('status') || 'approved').trim(),
     purchasedTasks: parseTaskList(String(formData.get('purchasedTasks') || '')),
     notes: String(formData.get('notes') || '').trim() || null,
+  });
+
+  await db.logAuditEvent(session.organizationId, {
+    actorUserId: session.userId,
+    actorName: session.name,
+    actorRole: session.role,
+    locationId: session.locationId,
+    action: 'create_service_authorization',
+    entityType: 'service_authorization',
+    entityId: authorizationId,
+    detail: `${serviceCode} for client ${clientId}`,
   });
 
   revalidatePath(`/admin/clients/${clientId}/care-plan`);
