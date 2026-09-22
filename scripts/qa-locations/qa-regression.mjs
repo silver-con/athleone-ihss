@@ -89,7 +89,7 @@ async function run() {
     'Caregiver not found');
 
   const scheduledVisitId = await db.createVisit(
-    ORG, { caregiverId: cg, clientId, day: 'wed', startTime: '9:00 AM', endTime: '11:00 AM' }, locId
+    ORG, { caregiverId: cg, clientId, day: 'wed', startTime: '9:00 AM', endTime: '11:00 AM', serviceAuthorizationId: authId }, locId
   );
   check('createVisit returns an id', typeof scheduledVisitId === 'string' && scheduledVisitId.length > 0);
   const scheduled = await db.getVisit(ORG, scheduledVisitId);
@@ -120,9 +120,9 @@ async function run() {
 
   // A 2-hour visit -> 120 min / 15 = 8 units.
   await query(
-    `INSERT INTO visits (id,organization_id,caregiver_id,client_id,day,service_date,start_time,end_time,status)
-     VALUES ('rv1',$1,$2,$3,'mon','2026-09-15','9:00 AM','11:00 AM','scheduled')`,
-    [ORG, cg, clientId]
+    `INSERT INTO visits (id,organization_id,caregiver_id,client_id,day,service_date,start_time,end_time,status,service_authorization_id)
+     VALUES ('rv1',$1,$2,$3,'mon','2026-09-15','9:00 AM','11:00 AM','scheduled',$4)`,
+    [ORG, cg, clientId, authId]
   );
 
   console.log('\n== clockIn / clockOut still work (locationId passed, as the action now does) ==');
@@ -168,6 +168,83 @@ async function run() {
   const syncRows = await query(`SELECT operation FROM evv_sync_log WHERE visit_id = 'rv1' ORDER BY operation`);
   check('clock-out + exception-resolve both enqueued EVV sync rows', syncRows.length >= 2,
     JSON.stringify(syncRows.map((r) => r.operation)));
+
+  console.log('\n== createVisit: explicit authorization pick resolves the billing-ambiguity bug ==');
+  // c-rr1 now legitimately has FOUR concurrently-approved authorizations
+  // (authId, hoursOnlyAuthId, explicitUnitsAuthId, neitherAuthId) -- exactly
+  // the real-world scenario (PAS attendant care + a separate Respite
+  // authorization, say) that made the old getActiveAuthorization guess in
+  // generateBillingLineForVisit arbitrary / timing-dependent. See
+  // claude/deferred-backlog.md.
+
+  await throws('omitting the pick is rejected when the client has more than one active authorization', () =>
+    db.createVisit(ORG, { caregiverId: cg, clientId, day: 'thu', startTime: '9:00 AM', endTime: '11:00 AM' }, locId),
+    'more than one active authorization');
+
+  await throws("a serviceAuthorizationId belonging to a different client is rejected", () =>
+    db.createVisit(ORG, {
+      caregiverId: cg, clientId, day: 'thu', startTime: '9:00 AM', endTime: '11:00 AM',
+      serviceAuthorizationId: 'not-this-clients-auth',
+    }, locId),
+    'does not belong to this client');
+
+  const disambiguatedVisitId = await db.createVisit(
+    ORG, {
+      caregiverId: cg, clientId, day: 'thu', startTime: '9:00 AM', endTime: '11:00 AM',
+      serviceAuthorizationId: explicitUnitsAuthId,
+    }, locId
+  );
+  const disambiguated = await db.getVisit(ORG, disambiguatedVisitId);
+  eq('the explicit pick round-trips through getVisit', disambiguated.serviceAuthorizationId, explicitUnitsAuthId);
+
+  await db.clockIn(ORG, disambiguatedVisitId, locId);
+  await db.clockOut(ORG, disambiguatedVisitId, locId);
+  const disambiguatedLineId = await db.getBillingLineByVisit(ORG, disambiguatedVisitId);
+  check('clockOut generated a billing line for the disambiguated visit', disambiguatedLineId !== null);
+  const allLinesAfterDisambiguation = await db.getBillingLines(ORG);
+  const disambiguatedLine = allLinesAfterDisambiguation.find((l) => l.visitId === disambiguatedVisitId);
+  eq("the billing line uses the EXPLICITLY PICKED authorization's service code (S5126), not a guess",
+    disambiguatedLine?.serviceCode, 'S5126');
+  eq('  ...units computed from the visit duration (120min / 15min unit = 8)', disambiguatedLine?.units, 8);
+
+  // A client with zero or exactly one active authorization is the common
+  // case and must stay exactly as simple as before -- no forced picker.
+  await query(
+    `INSERT INTO referrals (id,organization_id,payer,client_name,dob,service,auth_hours,auth_number,diagnosis,received_date,status)
+     VALUES ('rr2',$1,'Medicaid','Single Auth Client','01/01/1955','PAS','20','A','DX','09/01/2026','new')`, [ORG]
+  );
+  await db.submitIntake(ORG, 'rr2', { clientName: 'Single Auth Client', authHours: '20 hrs/wk', locationId: locId, careNeeds: [] });
+  const singleAuthClientId = 'c-rr2';
+  const soloVisitId = await db.createVisit(
+    ORG, { caregiverId: cg, clientId: singleAuthClientId, day: 'fri', startTime: '9:00 AM', endTime: '10:00 AM' }, locId
+  );
+  check('a client with ZERO active authorizations schedules fine without a pick (nothing to disambiguate)',
+    typeof soloVisitId === 'string' && soloVisitId.length > 0);
+
+  const soloAuthId = await db.createServiceAuthorization(ORG, {
+    clientId: singleAuthClientId, payer: 'Medicaid', serviceCode: 'S5128', serviceDescription: 'Solo Service',
+    unitMinutes: 15, frequency: 'Weekly', startDate: '09/01/2026', endDate: '12/31/2026',
+    status: 'approved', ratePerUnit: 40,
+  });
+  const soloVisitId2 = await db.createVisit(
+    ORG, { caregiverId: cg, clientId: singleAuthClientId, day: 'fri', startTime: '10:00 AM', endTime: '11:00 AM' }, locId
+  );
+  check('with exactly ONE active authorization, createVisit still does not require an explicit pick',
+    typeof soloVisitId2 === 'string' && soloVisitId2.length > 0);
+  // The API leaves the pick optional and null here (the schedule-a-visit UI
+  // pre-fills it for the user in this single-authorization case via its
+  // defaultValue -- see components/admin/ScheduleClient.js). Either way,
+  // billing must still resolve correctly: with only one approved
+  // authorization on file, generateBillingLineForVisit's fallback guess is
+  // no longer a guess -- there's nothing else it could be.
+  await db.clockIn(ORG, soloVisitId2, locId);
+  await db.clockOut(ORG, soloVisitId2, locId);
+  const soloLineId = await db.getBillingLineByVisit(ORG, soloVisitId2);
+  check('clockOut generated a billing line for the unambiguous single-authorization visit', soloLineId !== null);
+  const allLinesAfterSolo = await db.getBillingLines(ORG);
+  const soloLine = allLinesAfterSolo.find((l) => l.visitId === soloVisitId2);
+  eq("with only one authorization on file, the fallback guess still lands on the right service code (S5128)",
+    soloLine?.serviceCode, 'S5128');
 
   console.log('\n== unrated authorization: revenue must NOT silently count as $0 ==');
   await query(`UPDATE service_authorizations SET rate_per_unit = NULL WHERE id = $1`, [authId]);

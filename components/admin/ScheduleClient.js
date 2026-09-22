@@ -13,7 +13,7 @@ function clientName(clients, id) {
   return clients.find((c) => c.id === id)?.name || 'Unknown client';
 }
 
-export default function ScheduleClient({ caregivers, clients, visits, reasonCodes = {} }) {
+export default function ScheduleClient({ caregivers, clients, visits, reasonCodes = {}, serviceAuthorizations = [] }) {
   const [selectedId, setSelectedId] = useState(null);
 
   const selected = visits.find((v) => v.id === selectedId) || null;
@@ -167,7 +167,7 @@ export default function ScheduleClient({ caregivers, clients, visits, reasonCode
         })}
       </div>
 
-      <ScheduleVisitForm caregivers={caregivers} clients={clients} />
+      <ScheduleVisitForm caregivers={caregivers} clients={clients} serviceAuthorizations={serviceAuthorizations} />
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 mt-4">
         {!selected ? (
@@ -176,7 +176,7 @@ export default function ScheduleClient({ caregivers, clients, visits, reasonCode
             once a visit has started.
           </div>
         ) : (
-          <VisitDetail visit={selected} caregivers={caregivers} clients={clients} />
+          <VisitDetail visit={selected} caregivers={caregivers} clients={clients} serviceAuthorizations={serviceAuthorizations} />
         )}
       </div>
     </div>
@@ -187,9 +187,13 @@ const fieldClass =
   'border border-[oklch(85%_0.01_85)] rounded-[9px] px-3 py-2 text-[13px] bg-[oklch(99%_0.004_85)] focus:outline-2 focus:outline-[oklch(80%_0.05_175)] focus:border-[oklch(60%_0.08_175)]';
 const labelClass = 'flex flex-col gap-1.5 text-[11.5px] font-display font-bold text-[oklch(45%_0.02_80)]';
 
-function ScheduleVisitForm({ caregivers, clients }) {
+function ScheduleVisitForm({ caregivers, clients, serviceAuthorizations }) {
   const [state, formAction, pending] = useActionState(createVisitAction, { error: null, success: null });
+  const [selectedClientId, setSelectedClientId] = useState('');
   const schedulable = caregivers.filter((cg) => cg.status !== 'on-leave');
+  const clientAuths = serviceAuthorizations.filter(
+    (a) => a.clientId === selectedClientId && a.status === 'approved'
+  );
 
   return (
     <details className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 mt-6">
@@ -216,13 +220,53 @@ function ScheduleVisitForm({ caregivers, clients }) {
           </label>
           <label className={labelClass}>
             Client
-            <select name="clientId" required defaultValue="" className={fieldClass}>
+            <select
+              name="clientId"
+              required
+              defaultValue=""
+              className={fieldClass}
+              onChange={(e) => setSelectedClientId(e.target.value)}
+            >
               <option value="" disabled>Pick a client…</option>
               {clients.map((cl) => (
                 <option key={cl.id} value={cl.id}>{cl.name}</option>
               ))}
             </select>
           </label>
+          {selectedClientId && (
+            <label className={labelClass}>
+              Service / authorization
+              {clientAuths.length === 0 ? (
+                <div className="text-[12px] text-[var(--muted)] italic px-3 py-2 border border-dashed border-[oklch(85%_0.01_85)] rounded-[9px]">
+                  No active authorization on file for this client — the visit can still be scheduled,
+                  it just won&rsquo;t auto-bill until one exists.
+                </div>
+              ) : (
+                <select
+                  key={selectedClientId}
+                  name="serviceAuthorizationId"
+                  required={clientAuths.length > 1}
+                  defaultValue={clientAuths.length === 1 ? clientAuths[0].id : ''}
+                  className={fieldClass}
+                >
+                  {clientAuths.length > 1 && (
+                    <option value="" disabled>Pick which service this visit is for…</option>
+                  )}
+                  {clientAuths.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.serviceCode} — {a.serviceDescription}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {clientAuths.length > 1 && (
+                <span className="text-[11px] font-normal text-[var(--muted)] normal-case tracking-normal">
+                  This client has {clientAuths.length} active authorizations — pick the one this visit
+                  is for so it bills correctly.
+                </span>
+              )}
+            </label>
+          )}
           <label className={labelClass}>
             Day (current schedule week)
             <select name="day" required defaultValue={TODAY_KEY} className={fieldClass}>
@@ -268,10 +312,11 @@ function ScheduleVisitForm({ caregivers, clients }) {
   );
 }
 
-function VisitDetail({ visit, caregivers, clients }) {
+function VisitDetail({ visit, caregivers, clients, serviceAuthorizations = [] }) {
   const info = visitStatusInfo(visit.status);
   const caregiver = caregivers.find((c) => c.id === visit.caregiverId);
   const day = WEEK_DAYS.find((d) => d.key === visit.day);
+  const auth = serviceAuthorizations.find((a) => a.id === visit.serviceAuthorizationId);
 
   return (
     <div className="grid grid-cols-[1fr_1.4fr] gap-8">
@@ -284,6 +329,12 @@ function VisitDetail({ visit, caregivers, clients }) {
         <div className="font-display font-extrabold text-[18px] mt-3">{clientName(clients, visit.clientId)}</div>
         <div className="text-[13px] text-[var(--muted)] mt-0.5">
           {caregiver?.name} · {day?.label} {day?.date}, {visit.start}–{visit.end}
+        </div>
+        <div className="text-[12.5px] text-[var(--muted)] mt-2">
+          Billing service:{' '}
+          <span className="font-display font-bold text-[oklch(30%_0.02_80)]">
+            {auth ? `${auth.serviceCode} — ${auth.serviceDescription}` : 'Not picked at scheduling'}
+          </span>
         </div>
       </div>
 

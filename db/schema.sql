@@ -185,6 +185,11 @@ CREATE TABLE IF NOT EXISTS visits (
   evv_exception   text,
   evv_note        text,
   tasks           jsonb NOT NULL DEFAULT '[]'
+  -- service_authorization_id is added via ALTER TABLE just below the
+  -- service_authorizations table further down this file, since this table
+  -- (visits) is defined before service_authorizations is and a same-
+  -- statement FK reference to a not-yet-existing table would fail on a
+  -- fresh database. See that ALTER for the full explanation.
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -414,6 +419,22 @@ CREATE TABLE IF NOT EXISTS service_authorizations (
   rate_per_unit         numeric,
   created_at            timestamptz NOT NULL DEFAULT now()
 );
+
+-- Which authorization a visit bills against, picked at scheduling time
+-- (2026-09-22) — see createVisit/generateBillingLineForVisit in
+-- lib/queries.js. A client can legitimately have more than one approved
+-- authorization live at once (e.g. PAS attendant care and a separate
+-- respite authorization), and before this column existed the
+-- auto-generated billing line just guessed via getActiveAuthorization,
+-- which stopped being a safe guess the moment there was more than one
+-- live candidate — createVisit now requires an explicit pick whenever a
+-- client has more than one. Added here via ALTER rather than inline on
+-- the visits table above because visits is defined earlier in this file,
+-- before service_authorizations exists to reference. Nullable so a
+-- pre-existing visit, or one for a client with zero authorizations on
+-- file, still schedules fine — generateBillingLineForVisit falls back to
+-- the old best-effort guess when this is null.
+ALTER TABLE visits ADD COLUMN IF NOT EXISTS service_authorization_id text REFERENCES service_authorizations(id) ON DELETE SET NULL;
 
 -- FINANCE / BILLING MODULE: internal claim-line tracking, generated from
 -- completed + EVV-verified visits against the authorization that covers

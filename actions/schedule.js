@@ -13,6 +13,9 @@ export async function createVisitAction(prevState, formData) {
     day: String(formData.get('day') || ''),
     startTime: String(formData.get('startTime') || ''),
     endTime: String(formData.get('endTime') || ''),
+    // Optional — db.createVisit only requires it when the client actually
+    // has more than one active authorization to disambiguate between.
+    serviceAuthorizationId: String(formData.get('serviceAuthorizationId') || '').trim() || undefined,
   };
 
   try {

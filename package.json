@@ -13,6 +13,7 @@
     "db:migrate-2026-09-17": "node --env-file=.env scripts/migrate-2026-09-17.mjs",
     "db:migrate-2026-09-21-multi-state": "node --env-file=.env scripts/migrate-2026-09-21-multi-state.mjs",
     "db:migrate-2026-09-22-audit-log": "node --env-file=.env scripts/migrate-2026-09-22-audit-log.mjs",
+    "db:migrate-2026-09-22-visit-service-authorization": "node --env-file=.env scripts/migrate-2026-09-22-visit-service-authorization.mjs",
     "db:seed": "node --env-file=.env scripts/seed.mjs",
     "platform:create-admin": "node --env-file=.env scripts/create-platform-admin.mjs",
     "mock:evv": "node mocks/hhaexchange-mock.mjs",
