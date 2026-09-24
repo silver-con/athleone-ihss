@@ -72,10 +72,10 @@ export default async function EvvPage({ searchParams }) {
             Electronic Visit Verification — clock-in/out records and exceptions, one week at a time
           </p>
           <Link
-            href="/admin/evv/sync"
+            href="/admin/evv/export"
             className="inline-block text-[12.5px] font-display font-bold text-[var(--accent)] mt-2"
           >
-            State transmission status →
+            Export status, visit by visit →
           </Link>
         </div>
         <Link

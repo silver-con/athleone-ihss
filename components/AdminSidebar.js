@@ -139,11 +139,24 @@ const NAV_ITEMS = [
     href: '/admin/evv',
     label: 'EVV Compliance',
     permission: 'admin.evv.dashboard.view',
-    match: (path) => path.startsWith('/admin/evv'),
+    match: (path) => path.startsWith('/admin/evv') && !path.startsWith('/admin/evv/export'),
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 21s-7-4.3-7-10.5V5.2L12 3l7 2.2v5.3C19 16.7 12 21 12 21Z" />
         <path d="M9 11.5l2 2 4-4.2" />
+      </svg>
+    ),
+  },
+  {
+    href: '/admin/evv/export',
+    label: 'EVV Export',
+    permission: 'admin.evv.export.view',
+    match: (path) => path.startsWith('/admin/evv/export'),
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 12h11" />
+        <path d="M11 7l5 5-5 5" />
+        <path d="M20 4v16" />
       </svg>
     ),
   },

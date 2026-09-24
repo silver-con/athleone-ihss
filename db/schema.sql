@@ -283,6 +283,13 @@ CREATE TABLE IF NOT EXISTS visits (
   evv_clock_out_location  text CHECK (evv_clock_out_location IS NULL OR evv_clock_out_location IN ('member_home', 'family_home', 'neighbor_home', 'community', 'other')),
   evv_clock_in_distance_ft  double precision,
   evv_clock_out_distance_ft double precision,
+  -- Office "hold" on sending this visit to the state aggregator (Vesta's
+  -- ON HOLD status). While held, the sync queue skips the visit's rows.
+  -- Added 2026-09-24.
+  evv_export_hold        boolean NOT NULL DEFAULT false,
+  evv_export_hold_reason text,
+  evv_export_hold_by     text,
+  evv_export_hold_at     timestamptz,
   evv_method      text,
   evv_verified    boolean NOT NULL DEFAULT false,
   evv_exception   text,
