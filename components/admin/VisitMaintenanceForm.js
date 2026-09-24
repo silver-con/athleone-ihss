@@ -17,7 +17,7 @@ const stepNum =
 
 // Contact -> document -> verify, on one form (Vesta's three steps, HHSC's
 // rules). The server re-checks everything; this only guides the user.
-export default function VisitMaintenanceForm({ visitId, reasonGroups, initialCodes = [], needsClockIn, needsClockOut, isMissed }) {
+export default function VisitMaintenanceForm({ visitId, reasonGroups, initialCodes = [], needsClockIn, needsClockOut, isMissed, currentBillMinutes = null }) {
   const [state, formAction, pending] = useActionState(performVisitMaintenanceAction, {});
   const [codes, setCodes] = useState(initialCodes);
   const allCodes = reasonGroups.flatMap((g) => g.codes);
@@ -26,6 +26,7 @@ export default function VisitMaintenanceForm({ visitId, reasonGroups, initialCod
   const noteHints = chosen.filter((c) => c.noteHint).map((c) => c.noteHint);
   const manualAllowed = chosen.some((c) => c.allowsManualTime);
   const timesNeeded = !isMissed && (needsClockIn || needsClockOut);
+  const lowersBill = codes.includes('110B');
 
   function toggle(code) {
     setCodes((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code].slice(-3)));
@@ -106,6 +107,23 @@ export default function VisitMaintenanceForm({ visitId, reasonGroups, initialCod
               {manualAllowed
                 ? 'Only the missing time can be entered. Recorded clock times and GPS can’t be changed (HHSC EVV Policy Handbook §9000).'
                 : 'Choose a 210 reason code (No Electronic Clock In or Clock Out) to enter a missing time.'}
+            </p>
+          </div>
+        )}
+
+        {lowersBill && (
+          <div className="mt-4">
+            <div className="text-[12.5px] font-display font-bold">Billable time after the adjustment</div>
+            <div className="flex items-center gap-2 mt-1.5">
+              <input name="billHours" type="number" min={0} max={24} step={1} required placeholder="h" className={field + ' w-[80px]'} />
+              <span className="text-[12.5px] text-[var(--muted)]">h</span>
+              <input name="billMinutes" type="number" min={0} max={59} step={1} placeholder="m" className={field + ' w-[80px]'} />
+              <span className="text-[12.5px] text-[var(--muted)]">m</span>
+            </div>
+            <p className="text-[11.5px] text-[var(--muted)] mt-1.5">
+              {currentBillMinutes
+                ? `Currently ${Math.floor(currentBillMinutes / 60)}h ${currentBillMinutes % 60}m. 110 B can only lower it; a draft billing line is recalculated automatically.`
+                : '110 B can only lower billable time.'}
             </p>
           </div>
         )}

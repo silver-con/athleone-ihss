@@ -290,6 +290,11 @@ CREATE TABLE IF NOT EXISTS visits (
   evv_export_hold_reason text,
   evv_export_hold_by     text,
   evv_export_hold_at     timestamptz,
+  -- Billable minutes after a downward adjustment (HHSC reason code 110 B,
+  -- "Downward adjustment of Bill Hours"), set only through visit
+  -- maintenance. NULL = bill the scheduled duration, as before. Can only
+  -- ever be lower than that. Added 2026-09-24.
+  bill_minutes           integer CHECK (bill_minutes IS NULL OR bill_minutes > 0),
   evv_method      text,
   evv_verified    boolean NOT NULL DEFAULT false,
   evv_exception   text,
@@ -324,6 +329,10 @@ CREATE TABLE IF NOT EXISTS visit_maintenance (
   manual_clock_in_at  timestamptz,
   manual_clock_out_at timestamptz,
   payer_reference    text,
+  -- A 110 B bill-hours adjustment made by this entry: billable minutes
+  -- before and after (NULL when the entry didn't change bill hours).
+  bill_minutes_before integer,
+  bill_minutes_after  integer,
   performed_by_user_id text,
   performed_by_name  text NOT NULL,
   performed_by_role  text NOT NULL,

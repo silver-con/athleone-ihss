@@ -34,8 +34,9 @@ export async function assignCaregiverAction(clientId, caregiverId) {
 export async function performVisitMaintenanceAction(prevState, formData) {
   const session = await requirePermission('admin.evv.exceptions.manage');
   const visitId = String(formData.get('visitId') || '').trim();
+  let result;
   try {
-    await db.performVisitMaintenance(
+    result = await db.performVisitMaintenance(
       session.organizationId,
       visitId,
       {
@@ -45,6 +46,8 @@ export async function performVisitMaintenanceAction(prevState, formData) {
         manualClockIn: String(formData.get('manualClockIn') || ''),
         manualClockOut: String(formData.get('manualClockOut') || ''),
         verified: formData.get('verified') === 'on',
+        billHours: String(formData.get('billHours') ?? ''),
+        billMinutes: String(formData.get('billMinutes') ?? ''),
       },
       { userId: session.userId, name: session.name, role: session.role, locationId: session.locationId }
     );
@@ -52,7 +55,13 @@ export async function performVisitMaintenanceAction(prevState, formData) {
     return { error: err.message || 'Could not save the visit maintenance.', success: null };
   }
   revalidateVisitPages(visitId);
-  return { error: null, success: 'Visit maintenance saved and verified.' };
+  revalidatePath('/admin/finance');
+  let billingNote = '';
+  if (result?.billing?.updated) billingNote = ` The draft billing line was lowered to ${result.billing.units} unit(s).`;
+  else if (result?.billing && !result.billing.updated) {
+    billingNote = ` Note: this visit's billing line is already ${result.billing.status}, so it wasn't changed — correct it with the payer.`;
+  }
+  return { error: null, success: `Visit maintenance saved and verified.${billingNote}` };
 }
 
 export async function recordVisitVmurAction(prevState, formData) {

@@ -8,6 +8,7 @@ import {
   getOrganization,
   getVisitMaintenanceHistory,
   getMaintenanceStatus,
+  billableMinutes,
 } from '@/lib/queries';
 import { getComplianceProfile, getReasonCodeInfo, selectableReasonCodes } from '@/lib/state-compliance';
 import { visitStatusInfo } from '@/lib/styles';
@@ -140,6 +141,7 @@ export default async function VisitMaintenancePage({ params }) {
                 needsClockIn={!hasIn}
                 needsClockOut={!hasOut}
                 isMissed={visit.status === 'missed'}
+                currentBillMinutes={billableMinutes(visit)}
               />
             </>
           ) : (
@@ -166,6 +168,13 @@ export default async function VisitMaintenancePage({ params }) {
             <Row label="Caregiver">{caregiver?.name || '—'}</Row>
             <Row label="Date of service">{formatDate(visit.serviceDate)}</Row>
             <Row label="Scheduled">{visit.start} – {visit.end}</Row>
+            <Row label="Billable time">
+              {(() => {
+                const m = billableMinutes(visit);
+                if (!m) return '—';
+                return `${Math.floor(m / 60)}h ${m % 60}m${visit.billMinutes ? ' (lowered, 110 B)' : ''}`;
+              })()}
+            </Row>
             <Row label="Clock-in">
               <ClockEvent visitId={visit.id} which="in" evv={visit.evv} radius={radius} hasHome={hasHome} />
             </Row>
@@ -214,6 +223,11 @@ export default async function VisitMaintenancePage({ params }) {
                         {[h.manualClockInAt && `in ${formatWhen(h.manualClockInAt)}`, h.manualClockOutAt && `out ${formatWhen(h.manualClockOutAt)}`]
                           .filter(Boolean)
                           .join(', ')}
+                      </div>
+                    )}
+                    {h.billMinutesAfter && (
+                      <div className="text-[var(--muted)]">
+                        Billable time lowered: {Math.floor(h.billMinutesBefore / 60)}h {h.billMinutesBefore % 60}m → {Math.floor(h.billMinutesAfter / 60)}h {h.billMinutesAfter % 60}m
                       </div>
                     )}
                     {h.payerReference && <div className="text-[var(--muted)]">Payer ref: {h.payerReference}</div>}
