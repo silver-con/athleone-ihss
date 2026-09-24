@@ -86,9 +86,11 @@ async function main() {
     console.log('Seeding clients…');
     for (const c of initialClients) {
       await client.query(
-        `INSERT INTO clients (id, organization_id, name, payer, auth_hours, auth_hours_num, intake_date, address, emergency_contact, care_needs, assigned_caregiver_id, hhsc_individual_number)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-        [c.id, ORG_PRIMARY, c.name, c.payer, c.authHours, c.authHoursNum, c.intakeDate, c.address || null, c.emergencyContact || null, JSON.stringify(c.careNeeds || []), c.assignedCaregiverId || null, c.hhscIndividualNumber || null]
+        `INSERT INTO clients (id, organization_id, name, payer, auth_hours, auth_hours_num, intake_date, address, emergency_contact, care_needs, assigned_caregiver_id, hhsc_individual_number,
+                              medicaid_id, date_of_birth, address_line1, city, state, zip)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+        [c.id, ORG_PRIMARY, c.name, c.payer, c.authHours, c.authHoursNum, c.intakeDate, c.address || null, c.emergencyContact || null, JSON.stringify(c.careNeeds || []), c.assignedCaregiverId || null, c.hhscIndividualNumber || null,
+         c.medicaidId || null, c.dateOfBirth || null, c.addressLine1 || null, c.city || null, c.state || null, c.zip || null]
       );
     }
 

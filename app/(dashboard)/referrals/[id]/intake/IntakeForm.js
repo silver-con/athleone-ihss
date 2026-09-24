@@ -37,7 +37,9 @@ export default function IntakeForm({ referral, careNeedOptions, locations = [] }
           <Field label="Phone" name="phone" placeholder="(   ) ___-____" />
           <Field label="Preferred Language" name="language" defaultValue="English" />
           <Field label="Street Address" name="address" full />
-          <Field label="City, State, ZIP" name="cityStateZip" full />
+          <Field label="City" name="city" />
+          <Field label="State" name="state" defaultValue="TX" />
+          <Field label="ZIP" name="zip" />
           <div className="flex flex-col gap-1.5 col-span-full">
             <span className="text-[11.5px] font-display font-bold text-[oklch(45%_0.02_80)]">Location</span>
             <select
@@ -64,7 +66,7 @@ export default function IntakeForm({ referral, careNeedOptions, locations = [] }
       <Section title="Payer & Authorization">
         <Grid cols={2}>
           <Field label="Payer Name" name="payerName" defaultValue={referral.payer} />
-          <Field label="Member / Medicaid ID" name="memberId" placeholder="Enter member ID" />
+          <Field label="Medicaid ID (9 digits)" name="memberId" placeholder="Required before EVV visits can be sent" />
           <Field label="Authorization Number" name="authNumber" defaultValue={referral.authNumber} />
           <Field label="Authorized Hours / Week" name="authHours" defaultValue={referral.authHours} />
           <Field label="Service Type" name="serviceType" defaultValue={referral.service} />

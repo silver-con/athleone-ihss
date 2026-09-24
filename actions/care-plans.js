@@ -64,3 +64,48 @@ export async function createAuthorizationAction(formData) {
   // lines into dollars on the franchise rollup, so that page is stale now.
   revalidatePath('/admin/locations');
 }
+
+// EVV identity card on the care-plan page (Medicaid ID, DOB, structured
+// service address). useActionState signature: (prevState, formData).
+export async function updateClientEvvIdentityAction(prevState, formData) {
+  const session = await requirePermission('admin.clients.evvIdentity.manage');
+  const clientId = String(formData.get('clientId') || '').trim();
+  if (!clientId) return { error: 'Which client?', success: null };
+
+  let changed;
+  try {
+    changed = await db.updateClientEvvIdentity(
+      session.organizationId,
+      clientId,
+      {
+        medicaidId: formData.get('medicaidId'),
+        dateOfBirth: formData.get('dateOfBirth'),
+        addressLine1: formData.get('addressLine1'),
+        city: formData.get('city'),
+        state: formData.get('state'),
+        zip: formData.get('zip'),
+      },
+      session.locationId
+    );
+  } catch (err) {
+    return { error: err.message || 'Could not save.', success: null };
+  }
+
+  if (changed.length === 0) return { error: null, success: 'No changes.' };
+
+  // Field NAMES only — the values (Medicaid ID, DOB) are PHI.
+  await db.logAuditEvent(session.organizationId, {
+    actorUserId: session.userId,
+    actorName: session.name,
+    actorRole: session.role,
+    locationId: session.locationId,
+    action: 'update_client_evv_identity',
+    entityType: 'client',
+    entityId: clientId,
+    detail: `changed: ${changed.join(', ')}`,
+  });
+
+  revalidatePath(`/admin/clients/${clientId}/care-plan`);
+  revalidatePath('/admin/clients');
+  return { error: null, success: 'EVV identity saved.' };
+}

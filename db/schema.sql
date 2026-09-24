@@ -195,8 +195,29 @@ CREATE TABLE IF NOT EXISTS clients (
   -- this client belongs to. NULL for agencies with no locations, or for a
   -- client an agency deliberately keeps agency-wide.
   location_id           text REFERENCES locations(id) ON DELETE SET NULL,
-  created_at            timestamptz NOT NULL DEFAULT now()
+  created_at            timestamptz NOT NULL DEFAULT now(),
+  -- EVV member identity, added 2026-09-23. The state aggregator identifies
+  -- the member by their 9-digit Texas Medicaid ID; before this column
+  -- existed, lib/evv-mapping.js fell back to Hearth's internal client id,
+  -- which the aggregator would reject. hhsc_individual_number above is a
+  -- different identifier (HHSC/DADS individual #, used on the 26 TAC §97
+  -- orientation form) and is NOT sent as the Medicaid ID.
+  -- date_of_birth is ISO 'YYYY-MM-DD' text (not a DATE column) so pg never
+  -- shifts it through a JS Date/timezone conversion.
+  -- address_line1/city/state/zip are the structured service address; the
+  -- free-text `address` column above stays as the display string.
+  medicaid_id           text CHECK (medicaid_id IS NULL OR medicaid_id ~ '^[0-9]{9}$'),
+  date_of_birth         text CHECK (date_of_birth IS NULL OR date_of_birth ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
+  address_line1         text,
+  city                  text,
+  state                 text CHECK (state IS NULL OR state ~ '^[A-Z]{2}$'),
+  zip                   text CHECK (zip IS NULL OR zip ~ '^[0-9]{5}(-[0-9]{4})?$')
 );
+
+-- One Medicaid ID belongs to one client per agency — a duplicate almost
+-- always means the same person was taken in twice.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_org_medicaid_id
+  ON clients(organization_id, medicaid_id) WHERE medicaid_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS visits (
   id              text PRIMARY KEY,

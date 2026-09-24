@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth';
 import { getClient, getServiceAuthorizations, getOrientationsForClient, getCaregiver } from '@/lib/queries';
 import { createAuthorizationAction } from '@/actions/care-plans';
 import { createOrientationAction } from '@/actions/orientations';
+import ClientEvvIdentityForm from '@/components/admin/ClientEvvIdentityForm';
 
 const STATUS_STYLES = {
   approved: 'bg-[oklch(94%_0.06_155)] text-[oklch(38%_0.1_155)]',
@@ -62,6 +63,34 @@ export default async function ClientCarePlanPage({ params }) {
         caregiver is authorized to do in this client&rsquo;s home, mirroring the payer&rsquo;s own authorization
         notice.
       </p>
+
+      <div
+        id="evv-identity"
+        className={
+          'bg-[var(--surface)] border rounded-2xl p-6 mt-6 ' +
+          (client.medicaidId ? 'border-[var(--border)]' : 'border-[oklch(80%_0.1_60)]')
+        }
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="font-display font-extrabold text-[15px]">EVV identity</div>
+            <div className="text-[12.5px] text-[var(--muted)] mt-0.5">
+              What the state EVV aggregator uses to match this client&rsquo;s visits to their Medicaid record.
+            </div>
+          </div>
+          {!client.medicaidId && (
+            <span className="text-[11px] font-display font-bold uppercase tracking-wide px-2.5 py-1 rounded-full shrink-0 bg-[oklch(94%_0.05_85)] text-[oklch(45%_0.1_75)]">
+              Medicaid ID missing
+            </span>
+          )}
+        </div>
+        {!client.medicaidId && (
+          <p className="text-[12.5px] text-[oklch(45%_0.1_75)] mt-3">
+            Visits for this client can&rsquo;t be sent to the EVV aggregator until a Medicaid ID is on file.
+          </p>
+        )}
+        <ClientEvvIdentityForm client={client} />
+      </div>
 
       <div className="flex flex-col gap-4 mt-6">
         {authorizations.length === 0 && (

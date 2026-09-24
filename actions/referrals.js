@@ -35,7 +35,7 @@ export async function submitIntakeAction(prevState, formData) {
 
   const fields = {};
   for (const key of [
-    'clientName', 'dob', 'phone', 'language', 'address', 'cityStateZip',
+    'clientName', 'dob', 'phone', 'language', 'address', 'city', 'state', 'zip',
     'payerName', 'memberId', 'authNumber', 'authHours', 'serviceType', 'effectiveDates',
     'ecName', 'ecRelationship', 'ecPhone', 'physicianName', 'physicianPhone',
   ]) {

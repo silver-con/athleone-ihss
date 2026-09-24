@@ -68,7 +68,7 @@ async function main() {
   const port = String(args.port || process.env.MOCK_EVV_PORT || '4010').trim();
   const status = String(args.status || 'live').trim();
   const providerTaxId = String(args['tax-id'] || '00-0000000').trim();
-  const officeIdentifier = String(args['office-id'] || '1234567890').trim();
+  const officeIdentifier = String(args['office-id'] || '1234567893').trim();
   const payerId = String(args['payer-id'] || 'TX-MEDICAID').trim();
   const officeQualifier = String(args['office-qualifier'] || 'NPI').trim();
 
