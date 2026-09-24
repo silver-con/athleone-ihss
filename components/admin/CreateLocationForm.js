@@ -21,8 +21,7 @@ export default function CreateLocationForm() {
 
       <p className="text-[12.5px] text-[var(--muted)] mt-2 max-w-[560px]">
         A location shares your agency&rsquo;s license, Medicaid provider number and EVV/e-sign
-        credentials — only caregivers, clients and the revenue they generate are scoped to it. Set
-        a commission rate if this location is a partner paying your agency out of their revenue.
+        credentials — only caregivers, clients and the revenue they generate are scoped to it.
       </p>
 
       {state?.error && (
@@ -37,24 +36,12 @@ export default function CreateLocationForm() {
         </div>
       )}
 
-      <form action={formAction} className="grid grid-cols-2 gap-4 mt-4">
-        <label className={labelClass}>
+      <form action={formAction} className="flex items-end gap-4 mt-4">
+        <label className={`${labelClass} flex-1 max-w-sm`}>
           Location name
           <input name="name" required placeholder="e.g. Houston Metro" className={field} />
         </label>
-        <label className={labelClass}>
-          Commission rate (%)
-          <input
-            name="commissionRate"
-            type="number"
-            min="0"
-            max="100"
-            step="0.01"
-            defaultValue="0"
-            className={field}
-          />
-        </label>
-        <div className="flex items-end col-span-2">
+        <div className="flex items-end">
           <button
             type="submit"
             disabled={pending}

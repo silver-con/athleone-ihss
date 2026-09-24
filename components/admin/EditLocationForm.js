@@ -30,23 +30,11 @@ export default function EditLocationForm({ location }) {
         </div>
       )}
 
-      <form action={formAction} className="grid grid-cols-3 gap-3 mt-3 items-end">
+      <form action={formAction} className="grid grid-cols-2 gap-3 mt-3 items-end">
         <input type="hidden" name="locationId" value={location.id} />
         <label className={labelClass}>
           Name
           <input name="name" required defaultValue={location.name} className={field} />
-        </label>
-        <label className={labelClass}>
-          Commission (%)
-          <input
-            name="commissionRate"
-            type="number"
-            step="0.01"
-            min="0"
-            max="100"
-            defaultValue={location.commissionRate}
-            className={field}
-          />
         </label>
         <label className={labelClass}>
           Status
@@ -55,7 +43,7 @@ export default function EditLocationForm({ location }) {
             <option value="inactive">Inactive</option>
           </select>
         </label>
-        <div className="col-span-3">
+        <div className="col-span-2">
           <button
             type="submit"
             disabled={pending}

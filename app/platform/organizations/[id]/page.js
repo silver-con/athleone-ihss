@@ -157,7 +157,6 @@ export default async function PlatformOrganizationDetailPage({ params }) {
   const doneCount = checklist.filter((s) => s.done).length;
 
   const totalRevenue = locations.reduce((sum, l) => sum + l.revenue, 0);
-  const totalCommission = locations.reduce((sum, l) => sum + l.commissionAmount, 0);
 
   return (
     <div>
@@ -302,8 +301,7 @@ export default async function PlatformOrganizationDetailPage({ params }) {
             Location revenue rollup
           </div>
           <div className="text-[12.5px] text-[var(--muted)]">
-            {locations.length} location{locations.length === 1 ? '' : 's'} · {currency(totalRevenue)} billed ·{' '}
-            {currency(totalCommission)} commission
+            {locations.length} location{locations.length === 1 ? '' : 's'} · {currency(totalRevenue)} billed
           </div>
         </Section>
       </div>
@@ -319,12 +317,11 @@ export default async function PlatformOrganizationDetailPage({ params }) {
                   <div>
                     <div className="font-display font-bold">{loc.name}</div>
                     <div className="text-[11.5px] text-[var(--muted)]">
-                      {loc.commissionRate}% commission · {loc.ratedLineCount} rated / {loc.unratedLineCount} unrated
+                      {loc.ratedLineCount} rated / {loc.unratedLineCount} unrated
                     </div>
                   </div>
                   <div className="text-right shrink-0">
                     <div className="font-display font-bold">{currency(loc.revenue)}</div>
-                    <div className="text-[11.5px] text-[var(--muted)]">{currency(loc.commissionAmount)} commission</div>
                   </div>
                 </div>
               ))}

@@ -247,8 +247,8 @@ export default async function ClientCarePlanPage({ params }) {
             Rate per unit ($)
             <input name="ratePerUnit" type="number" step="0.01" min="0" placeholder="25.00" className="border border-[var(--border)] rounded-lg px-3 py-2 text-[13px] font-body font-normal" />
             <span className="text-[11px] font-body font-normal text-[var(--muted)]">
-              Drives billed revenue and franchise commission. Leave blank if the payer rate
-              isn&rsquo;t confirmed — lines then show as unrated rather than $0.
+              Drives billed revenue. Leave blank if the payer rate isn&rsquo;t confirmed — lines
+              then show as unrated rather than $0.
             </span>
           </label>
 

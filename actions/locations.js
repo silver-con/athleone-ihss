@@ -19,17 +19,17 @@ export async function createLocationAction(prevState, formData) {
   const session = await requirePermission('admin.locations.manage');
 
   const name = String(formData.get('name') || '').trim();
-  const commissionRateRaw = String(formData.get('commissionRate') || '').trim();
-  const commissionRate = commissionRateRaw === '' ? 0 : Number(commissionRateRaw);
 
   if (!name) {
     return { error: 'Location name is required.', success: null };
   }
-  if (Number.isNaN(commissionRate) || commissionRate < 0 || commissionRate > 100) {
-    return { error: 'Commission rate must be a number between 0 and 100.', success: null };
-  }
 
-  await createLocation(session.organizationId, { name, commissionRate });
+  // Commission is intentionally not exposed here — it was a one-off
+  // franchise idea, not a default feature. createLocation() leaves it at
+  // the schema default (0) for every new location. Re-introduce it as an
+  // opt-in, per-org control-panel setting rather than a form field here if
+  // it's ever needed again — see claude/deferred-backlog.md.
+  await createLocation(session.organizationId, { name });
   revalidatePath('/admin/locations');
 
   return { error: null, success: `${name} added.` };
@@ -42,7 +42,6 @@ export async function updateLocationAction(prevState, formData) {
 
   const id = String(formData.get('locationId') || '').trim();
   const name = String(formData.get('name') || '').trim();
-  const commissionRateRaw = String(formData.get('commissionRate') || '').trim();
   const status = String(formData.get('status') || '').trim();
 
   if (!id) return { error: 'Which location?', success: null };
@@ -50,13 +49,12 @@ export async function updateLocationAction(prevState, formData) {
   if (!['active', 'inactive'].includes(status)) {
     return { error: 'Status must be active or inactive.', success: null };
   }
-  const commissionRate = commissionRateRaw === '' ? 0 : Number(commissionRateRaw);
-  if (Number.isNaN(commissionRate) || commissionRate < 0 || commissionRate > 100) {
-    return { error: 'Commission rate must be a number between 0 and 100.', success: null };
-  }
 
+  // Commission isn't editable from this form (see createLocationAction) —
+  // omitting it from the update leaves whatever value is already on the
+  // row untouched, rather than resetting it to 0.
   try {
-    await updateLocation(session.organizationId, id, { name, commissionRate, status });
+    await updateLocation(session.organizationId, id, { name, status });
   } catch (err) {
     return { error: err.message || 'Could not update the location.', success: null };
   }

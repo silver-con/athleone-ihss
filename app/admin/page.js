@@ -97,7 +97,6 @@ export default async function AdminOverviewPage() {
   const complianceProfile = getComplianceProfile(organization?.state);
   const syncFailedCount = syncLog.filter((r) => r.status === 'failed').length;
   const totalLocationRevenue = locations.reduce((sum, l) => sum + l.revenue, 0);
-  const totalLocationCommission = locations.reduce((sum, l) => sum + l.commissionAmount, 0);
 
   const caregiverByStatus = caregivers.reduce((acc, cg) => {
     acc[cg.status] = (acc[cg.status] || 0) + 1;
@@ -370,7 +369,7 @@ export default async function AdminOverviewPage() {
                 <div className="flex items-center justify-between text-[13px] mb-2.5">
                   <span className="text-[var(--muted)]">{locations.length} location{locations.length === 1 ? '' : 's'}</span>
                   <span className="font-display font-bold">
-                    {currency(totalLocationRevenue)} billed · {currency(totalLocationCommission)} commission
+                    {currency(totalLocationRevenue)} billed
                   </span>
                 </div>
                 <div className="flex flex-col gap-1.5">
