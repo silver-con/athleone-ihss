@@ -20,7 +20,7 @@ import StatTile from '@/components/StatTile';
 import BarChart from '@/components/charts/BarChart';
 import StatusBar from '@/components/charts/StatusBar';
 import { REFERRAL_STATUS_ORDER, statusInfo } from '@/lib/styles';
-import { WEEK_DAYS } from '@/lib/data';
+import { shortDayLabel } from '@/lib/calendar';
 
 const STATUS_FILL = {
   new: 'oklch(72% 0.13 55)',
@@ -219,17 +219,16 @@ export default async function AdminOverviewPage() {
               ))}
               {openExceptions.map((v) => {
                 const client = clients.find((c) => c.id === v.clientId);
-                const day = WEEK_DAYS.find((d) => d.key === v.day);
                 return (
                   <div key={v.id} className="flex items-center justify-between gap-3">
                     <div>
                       <div className="font-display font-bold text-[13.5px]">{client?.name}</div>
                       <div className="text-[12px] text-[var(--muted)]">
-                        EVV exception (code {v.evv.exception}) · {day ? `${day.label} ${v.start}` : v.serviceDate}
+                        EVV exception (code {v.evv.exception}) · {shortDayLabel(v.serviceDate)} {v.start}
                       </div>
                     </div>
                     <Link
-                      href="/admin/compliance"
+                      href={`/admin/evv/visits/${v.id}`}
                       className="text-[12px] font-display font-bold text-[var(--danger)] whitespace-nowrap"
                     >
                       Review →

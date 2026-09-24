@@ -10,7 +10,7 @@ import {
   getVisitsForClient,
   getDocusignCredentials,
 } from '@/lib/queries';
-import { WEEK_DAYS } from '@/lib/data';
+import { getWeek, mondayOf, todayIso, daysBetween } from '@/lib/calendar';
 import { completeOrientationAction } from '@/actions/orientations';
 import PrintButton from '@/components/admin/PrintButton';
 import SendOrientationForSignature from '@/components/admin/SendOrientationForSignature';
@@ -79,10 +79,16 @@ export default async function OrientationDocumentPage({ params }) {
   ]);
 
   // Weekly schedule: one representative visit per weekday for this
-  // caregiver-client pairing. Rendered live rather than snapshotted, so the
-  // document always shows the schedule as it currently stands.
-  const scheduleRows = WEEK_DAYS.map((d) => {
-    const visit = visits.find((v) => v.day === d.key && v.caregiverId === orientation.caregiverId);
+  // caregiver-client pairing — for each weekday, the pairing's visit on
+  // that weekday closest to today (real calendar, 2026-09-24). Rendered
+  // live rather than snapshotted, so the document always shows the
+  // schedule as it currently stands.
+  const today = todayIso();
+  const pairingVisits = visits.filter((v) => v.caregiverId === orientation.caregiverId && v.serviceDate);
+  const scheduleRows = getWeek(mondayOf(today)).map((d) => {
+    const visit = pairingVisits
+      .filter((v) => v.day === d.key)
+      .sort((a, b) => Math.abs(daysBetween(today, a.serviceDate)) - Math.abs(daysBetween(today, b.serviceDate)))[0];
     const hours = visit ? hoursBetween(visit.start, visit.end) : null;
     return { day: d.label, start: visit?.start || null, end: visit?.end || null, hours };
   });

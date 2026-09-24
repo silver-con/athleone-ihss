@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getClient, getVisitsForCaregiver } from '@/lib/queries';
-import { WEEK_DAYS, careNeedOptions } from '@/lib/data';
+import { careNeedOptions } from '@/lib/data';
+import { shortDayLabel } from '@/lib/calendar';
 import { visitStatusInfo } from '@/lib/styles';
 
 export default async function CaregiverClientProfilePage({ params }) {
@@ -24,7 +25,10 @@ export default async function CaregiverClientProfilePage({ params }) {
   const history = myVisits
     .filter((v) => v.clientId === client.id && v.status !== 'scheduled')
     .slice()
-    .sort((a, b) => WEEK_DAYS.findIndex((d) => d.key === a.day) - WEEK_DAYS.findIndex((d) => d.key === b.day));
+    // Most recent first, by real date (2026-09-24; was weekday order within
+    // the fixed demo week).
+    .sort((a, b) => (b.serviceDate || '').localeCompare(a.serviceDate || ''))
+    .slice(0, 20);
 
   const careNeeds = (client.careNeeds || [])
     .map((tid) => careNeedOptions.find((o) => o.id === tid)?.label)
@@ -77,12 +81,11 @@ export default async function CaregiverClientProfilePage({ params }) {
           Visit history
         </div>
         {history.length === 0 ? (
-          <p className="text-[13px] text-[var(--muted)]">No visits recorded yet this week.</p>
+          <p className="text-[13px] text-[var(--muted)]">No visits recorded yet.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {history.map((v) => {
               const info = visitStatusInfo(v.status);
-              const day = WEEK_DAYS.find((d) => d.key === v.day);
               return (
                 <Link
                   key={v.id}
@@ -90,7 +93,7 @@ export default async function CaregiverClientProfilePage({ params }) {
                   className="flex items-center justify-between gap-3 bg-[var(--surface)] border border-[var(--border)] rounded-[12px] px-3.5 py-3"
                 >
                   <div>
-                    <div className="font-display font-bold text-[13px]">{day?.label} {day?.date}</div>
+                    <div className="font-display font-bold text-[13px]">{shortDayLabel(v.serviceDate)}</div>
                     <div className="text-[11.5px] text-[var(--muted)] mt-0.5">{v.start}–{v.end}</div>
                   </div>
                   <span className={'inline-flex items-center gap-1.5 text-[10.5px] font-display font-bold px-2.5 py-1 rounded-full ' + info.className}>

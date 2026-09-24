@@ -12,7 +12,14 @@ import {
   initialCaregivers,
   initialVisits,
   initialMessages,
+  DEMO_TODAY_ISO,
 } from '../lib/data.js';
+import { todayIso, addDays, daysBetween, dayKeyForIso } from '../lib/calendar.js';
+
+// Every demo visit date is shifted by the same number of days so the demo's
+// "today" (DEMO_TODAY_ISO) lands on the real current date — see lib/data.js.
+const DEMO_DATE_SHIFT = daysBetween(DEMO_TODAY_ISO, todayIso());
+const shiftDemoDate = (iso) => (iso ? addDays(iso, DEMO_DATE_SHIFT) : iso);
 
 // Multi-tenant: seeds the original demo agency (org-hearth-demo) with the
 // full sample dataset, plus a second, minimal agency (org-second-demo) with
@@ -104,8 +111,8 @@ async function main() {
           ORG_PRIMARY,
           v.caregiverId,
           v.clientId,
-          v.day || null,
-          v.serviceDate,
+          dayKeyForIso(shiftDemoDate(v.serviceDate)),
+          shiftDemoDate(v.serviceDate),
           v.start,
           v.end,
           v.status,
@@ -175,7 +182,7 @@ async function main() {
     await client.query(
       `INSERT INTO billing_lines (id, organization_id, client_id, visit_id, service_authorization_id, service_code, units, service_date, status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [randomUUID(), ORG_PRIMARY, 'c1', 'v1', authId, 'S5125', 8, '2026-09-14', 'ready']
+      [randomUUID(), ORG_PRIMARY, 'c1', 'v1', authId, 'S5125', 8, shiftDemoDate('2026-09-14'), 'ready']
     );
 
     // Training library. Titles reflect the topics a Texas PAS agency
@@ -283,7 +290,9 @@ async function main() {
     await client.query(
       `INSERT INTO visits (id, organization_id, caregiver_id, client_id, day, service_date, start_time, end_time, status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'scheduled')`,
-      ['v-second-1', ORG_SECONDARY, 'cg-second-1', 'c-second-1', 'mon', new Date().toLocaleDateString('en-US'), '9:00 AM', '11:00 AM']
+      // service_date must be ISO 'YYYY-MM-DD' (was toLocaleDateString, i.e.
+      // '9/24/2026', which no date comparison in the app could read).
+      ['v-second-1', ORG_SECONDARY, 'cg-second-1', 'c-second-1', dayKeyForIso(todayIso()), todayIso(), '9:00 AM', '11:00 AM']
     );
 
     console.log('Seeding login accounts…');

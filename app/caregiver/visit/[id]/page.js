@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getVisit, getClient, getOrganization } from '@/lib/queries';
-import { WEEK_DAYS } from '@/lib/data';
+import { shortDayLabel } from '@/lib/calendar';
 import { getComplianceProfile, getReasonCodeInfo } from '@/lib/state-compliance';
 import { visitStatusInfo } from '@/lib/styles';
 import { ClockInButton, ClockOutButton } from '@/components/caregiver/ClockButton';
@@ -52,7 +52,6 @@ export default async function VisitDetailPage({ params }) {
   ]);
   const profile = getComplianceProfile(organization?.state);
   const info = visitStatusInfo(visit.status);
-  const day = WEEK_DAYS.find((d) => d.key === visit.day);
   const canEditTasks = visit.status === 'in-progress' || visit.status === 'completed';
 
   return (
@@ -63,7 +62,7 @@ export default async function VisitDetailPage({ params }) {
         <div>
           <div className="font-display font-extrabold text-[19px]">{client?.name}</div>
           <div className="text-[12.5px] text-[var(--muted)] mt-0.5">
-            {day?.label} {day?.date} · {visit.start}–{visit.end}
+            {shortDayLabel(visit.serviceDate)} · {visit.start}–{visit.end}
           </div>
         </div>
         <span className={'shrink-0 inline-flex items-center gap-1.5 text-[10.5px] font-display font-bold px-2.5 py-1 rounded-full ' + info.className}>

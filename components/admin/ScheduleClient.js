@@ -2,7 +2,8 @@
 
 import { useState, useActionState } from 'react';
 import Link from 'next/link';
-import { WEEK_DAYS, TODAY_KEY } from '@/lib/data';
+import { shortDayLabel, weekRangeLabel } from '@/lib/calendar';
+import WeekNav from '@/components/WeekNav';
 import { visitStatusInfo, VISIT_STATUS_ORDER, caregiverStatusInfo } from '@/lib/styles';
 import { createVisitAction } from '@/actions/schedule';
 
@@ -13,7 +14,9 @@ function clientName(clients, id) {
   return clients.find((c) => c.id === id)?.name || 'Unknown client';
 }
 
-export default function ScheduleClient({ caregivers, clients, visits, reasonCodes = {}, serviceAuthorizations = [] }) {
+// `week` is the 7 days being shown (lib/calendar.js getWeek), `today` the
+// agency's current date — both from the server page, real calendar.
+export default function ScheduleClient({ caregivers, clients, visits, week, weekStart, today, reasonCodes = {}, serviceAuthorizations = [] }) {
   const [selectedId, setSelectedId] = useState(null);
 
   const selected = visits.find((v) => v.id === selectedId) || null;
@@ -27,10 +30,12 @@ export default function ScheduleClient({ caregivers, clients, visits, reasonCode
         <div>
           <h1 className="font-display font-extrabold text-[24px]">Schedule</h1>
           <p className="text-[13.5px] text-[var(--muted)] mt-1">
-            Week of Sep 14–20 · caregiver visits across every active client
+            Week of {weekRangeLabel(weekStart)} · caregiver visits across every active client
           </p>
         </div>
-        <div className="flex items-center gap-4 text-[12px] text-[var(--muted)] pt-1.5 shrink-0">
+        <div className="flex flex-col items-end gap-3 shrink-0">
+        <WeekNav basePath="/admin/schedule" weekStart={weekStart} />
+        <div className="flex items-center gap-4 text-[12px] text-[var(--muted)]">
           {VISIT_STATUS_ORDER.map((key) => {
             const info = visitStatusInfo(key);
             return (
@@ -40,6 +45,7 @@ export default function ScheduleClient({ caregivers, clients, visits, reasonCode
               </div>
             );
           })}
+        </div>
         </div>
       </div>
 
@@ -59,10 +65,10 @@ export default function ScheduleClient({ caregivers, clients, visits, reasonCode
               <div key={v.id} className="flex items-center justify-between gap-3">
                 <div>
                   <span className="font-display font-bold">{clientName(clients, v.clientId)}</span>&rsquo;s{' '}
-                  {WEEK_DAYS.find((d) => d.key === v.day)?.label} {v.start}–{v.end} visit was missed
+                  {shortDayLabel(v.serviceDate)} {v.start}–{v.end} visit was missed
                   ({caregivers.find((c) => c.id === v.caregiverId)?.name}).
                 </div>
-                <Link href="/admin/evv" className="font-display font-bold underline whitespace-nowrap">
+                <Link href={`/admin/evv/visits/${v.id}`} className="font-display font-bold underline whitespace-nowrap">
                   Review →
                 </Link>
               </div>
@@ -77,12 +83,12 @@ export default function ScheduleClient({ caregivers, clients, visits, reasonCode
           style={{ gridTemplateColumns: GRID_COLS, minWidth: GRID_MIN_WIDTH }}
         >
           <div className="px-4 py-3">Caregiver</div>
-          {WEEK_DAYS.map((d) => (
+          {week.map((d) => (
             <div
-              key={d.key}
+              key={d.iso}
               className={
                 'px-2 py-3 text-center rounded-t-[10px] ' +
-                (d.key === TODAY_KEY ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : '')
+                (d.iso === today ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : '')
               }
             >
               <div>{d.label}</div>
@@ -125,14 +131,14 @@ export default function ScheduleClient({ caregivers, clients, visits, reasonCode
                 <div className="font-display font-bold text-[13px]">{cg.name}</div>
                 <div className="text-[11.5px] text-[var(--muted)] mt-0.5">{cg.role}</div>
               </div>
-              {WEEK_DAYS.map((d) => {
-                const dayVisits = cgVisits.filter((v) => v.day === d.key);
+              {week.map((d) => {
+                const dayVisits = cgVisits.filter((v) => v.serviceDate === d.iso);
                 return (
                   <div
-                    key={d.key}
+                    key={d.iso}
                     className={
                       'px-1.5 py-2.5 flex flex-col gap-1.5 border-l border-[oklch(95%_0.006_85)] ' +
-                      (d.key === TODAY_KEY ? 'bg-[oklch(98.5%_0.01_175)]' : '')
+                      (d.iso === today ? 'bg-[oklch(98.5%_0.01_175)]' : '')
                     }
                   >
                     {dayVisits.map((v) => {
@@ -167,7 +173,12 @@ export default function ScheduleClient({ caregivers, clients, visits, reasonCode
         })}
       </div>
 
-      <ScheduleVisitForm caregivers={caregivers} clients={clients} serviceAuthorizations={serviceAuthorizations} />
+      <ScheduleVisitForm
+        caregivers={caregivers}
+        clients={clients}
+        serviceAuthorizations={serviceAuthorizations}
+        defaultDate={week.some((d) => d.iso === today) ? today : weekStart}
+      />
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 mt-4">
         {!selected ? (
@@ -176,7 +187,13 @@ export default function ScheduleClient({ caregivers, clients, visits, reasonCode
             once a visit has started.
           </div>
         ) : (
-          <VisitDetail visit={selected} caregivers={caregivers} clients={clients} serviceAuthorizations={serviceAuthorizations} />
+          <VisitDetail
+            visit={selected}
+            caregivers={caregivers}
+            clients={clients}
+            serviceAuthorizations={serviceAuthorizations}
+            reasonCodes={reasonCodes}
+          />
         )}
       </div>
     </div>
@@ -187,7 +204,7 @@ const fieldClass =
   'border border-[oklch(85%_0.01_85)] rounded-[9px] px-3 py-2 text-[13px] bg-[oklch(99%_0.004_85)] focus:outline-2 focus:outline-[oklch(80%_0.05_175)] focus:border-[oklch(60%_0.08_175)]';
 const labelClass = 'flex flex-col gap-1.5 text-[11.5px] font-display font-bold text-[oklch(45%_0.02_80)]';
 
-function ScheduleVisitForm({ caregivers, clients, serviceAuthorizations }) {
+function ScheduleVisitForm({ caregivers, clients, serviceAuthorizations, defaultDate }) {
   const [state, formAction, pending] = useActionState(createVisitAction, { error: null, success: null });
   const [selectedClientId, setSelectedClientId] = useState('');
   const schedulable = caregivers.filter((cg) => cg.status !== 'on-leave');
@@ -268,12 +285,8 @@ function ScheduleVisitForm({ caregivers, clients, serviceAuthorizations }) {
             </label>
           )}
           <label className={labelClass}>
-            Day (current schedule week)
-            <select name="day" required defaultValue={TODAY_KEY} className={fieldClass}>
-              {WEEK_DAYS.map((d) => (
-                <option key={d.key} value={d.key}>{d.label} {d.date}</option>
-              ))}
-            </select>
+            Date
+            <input key={defaultDate} name="serviceDate" type="date" required defaultValue={defaultDate} className={fieldClass} />
           </label>
           <div className="grid grid-cols-2 gap-4">
             <label className={labelClass}>
@@ -312,10 +325,12 @@ function ScheduleVisitForm({ caregivers, clients, serviceAuthorizations }) {
   );
 }
 
-function VisitDetail({ visit, caregivers, clients, serviceAuthorizations = [] }) {
+// reasonCodes is passed in explicitly — until 2026-09-24 this component
+// referenced it without receiving it, so selecting a visit with an EVV
+// exception threw a ReferenceError.
+function VisitDetail({ visit, caregivers, clients, serviceAuthorizations = [], reasonCodes = {} }) {
   const info = visitStatusInfo(visit.status);
   const caregiver = caregivers.find((c) => c.id === visit.caregiverId);
-  const day = WEEK_DAYS.find((d) => d.key === visit.day);
   const auth = serviceAuthorizations.find((a) => a.id === visit.serviceAuthorizationId);
 
   return (
@@ -328,7 +343,7 @@ function VisitDetail({ visit, caregivers, clients, serviceAuthorizations = [] })
 
         <div className="font-display font-extrabold text-[18px] mt-3">{clientName(clients, visit.clientId)}</div>
         <div className="text-[13px] text-[var(--muted)] mt-0.5">
-          {caregiver?.name} · {day?.label} {day?.date}, {visit.start}–{visit.end}
+          {caregiver?.name} · {shortDayLabel(visit.serviceDate)}, {visit.start}–{visit.end}
         </div>
         <div className="text-[12.5px] text-[var(--muted)] mt-2">
           Billing service:{' '}
@@ -384,10 +399,10 @@ function VisitDetail({ visit, caregivers, clients, serviceAuthorizations = [] })
         )}
 
         <Link
-          href="/admin/evv"
+          href={`/admin/evv/visits/${visit.id}`}
           className="inline-block mt-4 text-[12.5px] font-display font-bold text-[var(--accent)]"
         >
-          Open full EVV compliance log →
+          Open visit record &amp; maintenance →
         </Link>
       </div>
     </div>

@@ -3,8 +3,9 @@ import { getSession } from '@/lib/auth';
 import { getCaregivers, getClients, getVisits, getOrganization, getAllServiceAuthorizations } from '@/lib/queries';
 import { getComplianceProfile } from '@/lib/state-compliance';
 import ScheduleClient from '@/components/admin/ScheduleClient';
+import { resolveWeekStart, getWeek, isInWeek, todayIso } from '@/lib/calendar';
 
-export default async function SchedulePage() {
+export default async function SchedulePage({ searchParams }) {
   const session = await getSession();
   if (!session) redirect('/login');
   const [caregivers, clients, allVisits, organization, serviceAuthorizations] = await Promise.all([
@@ -15,15 +16,20 @@ export default async function SchedulePage() {
     getAllServiceAuthorizations(session.organizationId, session.locationId),
   ]);
   const reasonCodes = getComplianceProfile(organization?.state)?.reasonCodes || {};
-  // This page is the current week's grid — backlog visits (`day: null`)
-  // belong to the Compliance Center's maintenance queue instead.
-  const visits = allVisits.filter((v) => v.day !== null);
+  // One real calendar week (?week=, default this week — 2026-09-24; this
+  // used to be the fixed demo week of Sep 14–20).
+  const weekStart = resolveWeekStart((await searchParams)?.week);
+  const week = getWeek(weekStart);
+  const visits = allVisits.filter((v) => isInWeek(v.serviceDate, weekStart));
 
   return (
     <ScheduleClient
       caregivers={caregivers}
       clients={clients}
       visits={visits}
+      week={week}
+      weekStart={weekStart}
+      today={todayIso()}
       reasonCodes={reasonCodes}
       serviceAuthorizations={serviceAuthorizations}
     />

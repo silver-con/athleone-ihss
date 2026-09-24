@@ -10,7 +10,7 @@ export async function createVisitAction(prevState, formData) {
   const data = {
     caregiverId: String(formData.get('caregiverId') || ''),
     clientId: String(formData.get('clientId') || ''),
-    day: String(formData.get('day') || ''),
+    serviceDate: String(formData.get('serviceDate') || '').trim(),
     startTime: String(formData.get('startTime') || ''),
     endTime: String(formData.get('endTime') || ''),
     // Optional — db.createVisit only requires it when the client actually

@@ -2,6 +2,7 @@
 // the functions the locations feature modified (clockIn/clockOut now take an
 // optional locationId and call the JOIN-based getVisit internally).
 import * as db from './queries.js';
+import { todayIso, addDays, getWeek, mondayOf } from './calendar.js';
 import { query, pool } from './db.js';
 
 let pass = 0;
@@ -79,6 +80,15 @@ async function run() {
   console.log('\n== createVisit: the admin \'schedule a visit\' writer (added for the manual-scheduling gap) ==');
   await throws('rejects a day not on the current schedule week', () =>
     db.createVisit(ORG, { caregiverId: cg, clientId, day: 'someday', startTime: '9:00 AM', endTime: '11:00 AM' }));
+  await throws('rejects a malformed date', () =>
+    db.createVisit(ORG, { caregiverId: cg, clientId, serviceDate: '2026-02-30', startTime: '9:00 AM', endTime: '11:00 AM' }),
+    'Pick the date');
+  await throws('rejects a date past the visit maintenance window', () =>
+    db.createVisit(ORG, { caregiverId: cg, clientId, serviceDate: addDays(todayIso(), -120), startTime: '9:00 AM', endTime: '11:00 AM' }),
+    'maintenance window');
+  await throws('rejects a date more than a year ahead', () =>
+    db.createVisit(ORG, { caregiverId: cg, clientId, serviceDate: addDays(todayIso(), 400), startTime: '9:00 AM', endTime: '11:00 AM' }),
+    'up to a year ahead');
   await throws('rejects a malformed start time', () =>
     db.createVisit(ORG, { caregiverId: cg, clientId, day: 'wed', startTime: '9am', endTime: '11:00 AM' }),
     'must look like');
@@ -101,7 +111,15 @@ async function run() {
   check('createVisit returns an id', typeof scheduledVisitId === 'string' && scheduledVisitId.length > 0);
   const scheduled = await db.getVisit(ORG, scheduledVisitId);
   eq('day stored', scheduled.day, 'wed');
-  eq('service date resolved from the schedule week (not passed in by the caller)', scheduled.serviceDate, '2026-09-16');
+  eq('a bare weekday resolves to that day of the REAL current week (not the old fixed demo week)',
+    scheduled.serviceDate, getWeek(mondayOf(todayIso())).find((d) => d.key === 'wed').iso);
+  const datedId = await db.createVisit(
+    ORG, { caregiverId: cg, clientId, serviceDate: addDays(todayIso(), 10), startTime: '9:00 AM', endTime: '11:00 AM', serviceAuthorizationId: authId }, locId
+  );
+  const dated = await db.getVisit(ORG, datedId);
+  eq('an explicit date is stored as given', dated.serviceDate, addDays(todayIso(), 10));
+  eq('  ...and its weekday key is derived from it', dated.day, getWeek(mondayOf(addDays(todayIso(), 10))).find((d) => d.iso === addDays(todayIso(), 10)).key);
+  await query('DELETE FROM visits WHERE id = $1', [datedId]);
   eq('times stored upper-cased, matching the EVV label format', scheduled.start, '9:00 AM');
   eq('  ...end time too', scheduled.end, '11:00 AM');
   eq('status defaults to scheduled', scheduled.status, 'scheduled');
@@ -292,7 +310,7 @@ async function run() {
 
   const fhDefaults = await db.getOrganization(FH_ORG);
   eq('flexible_hours_enabled defaults to false (opt-in -- see the migration file for why: ' +
-    'lib/data.js WEEK_DAYS is a fixed demo week, not the real rolling date)',
+    'it changes how every clock-out is judged, so each agency turns it on deliberately)',
     fhDefaults.flexibleHoursEnabled, false);
   eq('flexible_hours_grace_minutes defaults to 20', fhDefaults.flexibleHoursGraceMinutes, 20);
 
@@ -306,14 +324,10 @@ async function run() {
   await db.submitIntake(FH_ORG, 'fh-r1', { clientName: 'FH Client', authHours: '20 hrs/wk', careNeeds: [] });
   const fhClientId = 'c-fh-r1';
 
-  // WEEK_DAYS in lib/data.js is a fixed demo reference week (2026-09-14
-  // through 2026-09-20) -- any visit scheduled through createVisit() has a
-  // scheduled end date well in the past by the time this suite actually
-  // runs, which is exactly why the feature defaults to disabled. That
-  // staleness doubles as a reliable "way past the grace period" fixture
-  // here without needing to fake the clock.
+  // Scheduled two days ago, so its scheduled end is well past any grace
+  // period when it's clocked out now (real calendar since 2026-09-24).
   const fhLateVisitId = await db.createVisit(
-    FH_ORG, { caregiverId: fhCg, clientId: fhClientId, day: 'wed', startTime: '9:00 AM', endTime: '11:00 AM' }
+    FH_ORG, { caregiverId: fhCg, clientId: fhClientId, serviceDate: addDays(todayIso(), -2), startTime: '9:00 AM', endTime: '11:00 AM' }
   );
 
   await db.clockIn(FH_ORG, fhLateVisitId);
@@ -324,7 +338,7 @@ async function run() {
 
   await db.updateOrganizationFlexibleHours(FH_ORG, { enabled: true, graceMinutes: 20 });
   const fhLateVisitId2 = await db.createVisit(
-    FH_ORG, { caregiverId: fhCg, clientId: fhClientId, day: 'thu', startTime: '9:00 AM', endTime: '11:00 AM' }
+    FH_ORG, { caregiverId: fhCg, clientId: fhClientId, serviceDate: addDays(todayIso(), -1), startTime: '9:00 AM', endTime: '11:00 AM' }
   );
   await db.clockIn(FH_ORG, fhLateVisitId2);
   await db.clockOut(FH_ORG, fhLateVisitId2);
@@ -337,8 +351,7 @@ async function run() {
     typeof enabledResult.evv?.note === 'string' && enabledResult.evv.note.includes('grace period'),
     `got ${JSON.stringify(enabledResult.evv?.note)}`);
 
-  // A visit whose scheduled end is genuinely still in the future (raw
-  // insert -- createVisit only accepts days from the fixed demo week).
+  // A visit whose scheduled end is genuinely still in the future.
   await query(
     `INSERT INTO visits (id,organization_id,caregiver_id,client_id,day,service_date,start_time,end_time,status)
      VALUES ('fh-future1',$1,$2,$3,null,'2099-12-31','9:00 AM','11:59 PM','scheduled')`,

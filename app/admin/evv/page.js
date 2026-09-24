@@ -5,11 +5,12 @@ import { getVisits, getClients, getCaregivers, getOrganization } from '@/lib/que
 import StatTile from '@/components/StatTile';
 import StatusBar from '@/components/charts/StatusBar';
 import ExceptionActionButton from '@/components/admin/ExceptionActionButton';
-import { WEEK_DAYS } from '@/lib/data';
+import { resolveWeekStart, isInWeek, shortDayLabel, todayIso, mondayOf } from '@/lib/calendar';
+import WeekNav from '@/components/WeekNav';
 import { getComplianceProfile, getReasonCodeInfo } from '@/lib/state-compliance';
 import { visitStatusInfo, VISIT_STATUS_ORDER } from '@/lib/styles';
 
-export default async function EvvPage() {
+export default async function EvvPage({ searchParams }) {
   const session = await getSession();
   if (!session) redirect('/login');
   const [allVisits, clients, caregivers, organization] = await Promise.all([
@@ -20,10 +21,11 @@ export default async function EvvPage() {
   ]);
   const profile = getComplianceProfile(organization?.state);
 
-  // This page is scoped to the current week's schedule; older backlog
-  // visits (`day: null`) live on the Compliance Center's maintenance queue
-  // instead, since they're not part of "this week's" visits.
-  const visits = allVisits.filter((v) => v.day !== null);
+  // One real calendar week at a time (?week=, default this week). Older
+  // open exceptions also show on the Compliance Center's maintenance queue.
+  const weekStart = resolveWeekStart((await searchParams)?.week);
+  const isThisWeek = weekStart === mondayOf(todayIso());
+  const visits = allVisits.filter((v) => isInWeek(v.serviceDate, weekStart));
 
   const closed = visits.filter((v) => v.status === 'completed' || v.status === 'missed');
   const verifiedClosed = closed.filter((v) => v.evv?.verified);
@@ -43,7 +45,7 @@ export default async function EvvPage() {
   const logRows = visits
     .filter((v) => v.status !== 'scheduled')
     .slice()
-    .sort((a, b) => WEEK_DAYS.findIndex((d) => d.key === a.day) - WEEK_DAYS.findIndex((d) => d.key === b.day));
+    .sort((a, b) => (a.serviceDate || '').localeCompare(b.serviceDate || '') || String(a.start).localeCompare(String(b.start)));
 
   return (
     <div>
@@ -51,7 +53,7 @@ export default async function EvvPage() {
         <div>
           <h1 className="font-display font-extrabold text-[24px]">EVV Compliance</h1>
           <p className="text-[13.5px] text-[var(--muted)] mt-1">
-            Electronic Visit Verification — clock-in/out records and exceptions for this week&rsquo;s visits
+            Electronic Visit Verification — clock-in/out records and exceptions, one week at a time
           </p>
           <Link
             href="/admin/evv/sync"
@@ -68,8 +70,12 @@ export default async function EvvPage() {
         </Link>
       </div>
 
-      <div className="flex flex-wrap gap-3 mt-6">
-        <StatTile num={visits.length} label="Visits this week" />
+      <div className="mt-5">
+        <WeekNav basePath="/admin/evv" weekStart={weekStart} />
+      </div>
+
+      <div className="flex flex-wrap gap-3 mt-4">
+        <StatTile num={visits.length} label={isThisWeek ? 'Visits this week' : 'Visits that week'} />
         <StatTile num={`${verifiedClosed.length} / ${closed.length || 0}`} label="Completed visits verified" />
         <StatTile
           num={missed.length}
@@ -116,7 +122,6 @@ export default async function EvvPage() {
         {logRows.map((v) => {
           const client = clients.find((c) => c.id === v.clientId);
           const caregiver = caregivers.find((c) => c.id === v.caregiverId);
-          const day = WEEK_DAYS.find((d) => d.key === v.day);
           const info = visitStatusInfo(v.status);
           const hasException = v.evv?.exception;
 
@@ -130,7 +135,7 @@ export default async function EvvPage() {
               </Link>
               <div>{caregiver?.name}</div>
               <div className="text-[12px] text-[var(--muted)]">
-                {day?.label} {v.start}
+                {shortDayLabel(v.serviceDate)} {v.start}
               </div>
               <div className="flex items-center gap-1">
                 {v.evv?.clockIn || '—'}

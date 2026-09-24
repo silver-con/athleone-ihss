@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getVisitsForCaregiver, getClients } from '@/lib/queries';
-import { WEEK_DAYS, TODAY_KEY } from '@/lib/data';
+import { todayIso, addDays, shortDayLabel } from '@/lib/calendar';
 import { visitStatusInfo } from '@/lib/styles';
 import { ClockInButton } from '@/components/caregiver/ClockButton';
 
@@ -15,8 +15,14 @@ export default async function CaregiverSchedulePage() {
     getClients(session.organizationId),
   ]);
 
-  const todayVisits = myVisits.filter((v) => v.day === TODAY_KEY);
-  const upcomingDays = WEEK_DAYS.filter((d) => d.key !== TODAY_KEY);
+  // Real calendar (2026-09-24): today in the agency's time zone, then the
+  // next seven days. Visits are matched on their actual date.
+  const today = todayIso();
+  const todayVisits = myVisits.filter((v) => v.serviceDate === today);
+  const upcomingDays = Array.from({ length: 7 }, (_, i) => {
+    const iso = addDays(today, i + 1);
+    return { key: iso, iso, heading: shortDayLabel(iso) };
+  });
 
   return (
     <div>
@@ -46,12 +52,12 @@ export default async function CaregiverSchedulePage() {
         </div>
         <div className="flex flex-col gap-2.5">
           {upcomingDays.map((d) => {
-            const dayVisits = myVisits.filter((v) => v.day === d.key);
+            const dayVisits = myVisits.filter((v) => v.serviceDate === d.iso);
             if (dayVisits.length === 0) return null;
             return (
               <div key={d.key}>
                 <div className="text-[11.5px] font-display font-bold text-[var(--muted)] mb-1.5">
-                  {d.label} {d.date}
+                  {d.heading}
                 </div>
                 <div className="flex flex-col gap-2">
                   {dayVisits.map((v) => (
