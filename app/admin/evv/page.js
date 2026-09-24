@@ -7,6 +7,7 @@ import StatusBar from '@/components/charts/StatusBar';
 import ExceptionActionButton from '@/components/admin/ExceptionActionButton';
 import { resolveWeekStart, isInWeek, shortDayLabel, todayIso, mondayOf } from '@/lib/calendar';
 import WeekNav from '@/components/WeekNav';
+import { visitLocationLabel, formatDistance, mapLink } from '@/lib/geo';
 import { getComplianceProfile, getReasonCodeInfo } from '@/lib/state-compliance';
 import { visitStatusInfo, VISIT_STATUS_ORDER } from '@/lib/styles';
 
@@ -23,9 +24,24 @@ export default async function EvvPage({ searchParams }) {
 
   // One real calendar week at a time (?week=, default this week). Older
   // open exceptions also show on the Compliance Center's maintenance queue.
-  const weekStart = resolveWeekStart((await searchParams)?.week);
+  const params = (await searchParams) || {};
+  const weekStart = resolveWeekStart(params.week);
   const isThisWeek = weekStart === mondayOf(todayIso());
-  const visits = allVisits.filter((v) => isInWeek(v.serviceDate, weekStart));
+  const weekVisits = allVisits.filter((v) => isInWeek(v.serviceDate, weekStart));
+
+  // Vesta-style location filter (Community Location guide): visits where the
+  // caregiver clocked in/out somewhere other than the client's home, or
+  // said "client's home" while GPS put them beyond the agency's radius.
+  const radius = organization?.homeRadiusFeet ?? 250;
+  const isAway = (v) =>
+    [v.evv?.clockInLocation, v.evv?.clockOutLocation].some((w) => w && w !== 'member_home');
+  const isFar = (v) =>
+    (v.evv?.clockInLocation === 'member_home' && v.evv?.clockInDistanceFt > radius) ||
+    (v.evv?.clockOutLocation === 'member_home' && v.evv?.clockOutDistanceFt > radius);
+  const whereFilter = ['away', 'far'].includes(params.where) ? params.where : 'all';
+  const visits = weekVisits.filter((v) => (whereFilter === 'away' ? isAway(v) : whereFilter === 'far' ? isFar(v) : true));
+  const awayCount = weekVisits.filter(isAway).length;
+  const farCount = weekVisits.filter(isFar).length;
 
   const closed = visits.filter((v) => v.status === 'completed' || v.status === 'missed');
   const verifiedClosed = closed.filter((v) => v.evv?.verified);
@@ -71,7 +87,27 @@ export default async function EvvPage({ searchParams }) {
       </div>
 
       <div className="mt-5">
-        <WeekNav basePath="/admin/evv" weekStart={weekStart} />
+        <WeekNav basePath="/admin/evv" weekStart={weekStart} query={whereFilter === 'all' ? '' : `where=${whereFilter}`} />
+        <div className="flex flex-wrap gap-2 mt-3">
+          {[
+            { key: 'all', label: 'All visits' },
+            { key: 'away', label: `Away from home (${awayCount})` },
+            { key: 'far', label: `Beyond ${radius} ft of home (${farCount})` },
+          ].map((f) => (
+            <Link
+              key={f.key}
+              href={`/admin/evv?week=${weekStart}${f.key === 'all' ? '' : `&where=${f.key}`}`}
+              className={
+                'text-[12px] font-display font-bold px-3 py-1.5 rounded-full border ' +
+                (whereFilter === f.key
+                  ? 'bg-[var(--accent-strong)] text-white border-[var(--accent-strong)]'
+                  : 'bg-[var(--surface)] border-[var(--border)] text-[var(--muted)]')
+              }
+            >
+              {f.label}
+            </Link>
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3 mt-4">
@@ -137,18 +173,22 @@ export default async function EvvPage({ searchParams }) {
               <div className="text-[12px] text-[var(--muted)]">
                 {shortDayLabel(v.serviceDate)} {v.start}
               </div>
-              <div className="flex items-center gap-1">
-                {v.evv?.clockIn || '—'}
-                {typeof v.evv?.clockInLat === 'number' && (
-                  <span title="Location captured on clock-in" className="text-[10px] text-[var(--success)]">●</span>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                {v.evv?.clockOut || '—'}
-                {typeof v.evv?.clockOutLat === 'number' && (
-                  <span title="Location captured on clock-out" className="text-[10px] text-[var(--success)]">●</span>
-                )}
-              </div>
+              <ClockCell
+                time={v.evv?.clockIn}
+                lat={v.evv?.clockInLat}
+                lng={v.evv?.clockInLng}
+                where={v.evv?.clockInLocation}
+                distance={v.evv?.clockInDistanceFt}
+                radius={radius}
+              />
+              <ClockCell
+                time={v.evv?.clockOut}
+                lat={v.evv?.clockOutLat}
+                lng={v.evv?.clockOutLng}
+                where={v.evv?.clockOutLocation}
+                distance={v.evv?.clockOutDistanceFt}
+                radius={radius}
+              />
               <div className="text-[12px]">{v.evv?.method || '—'}</div>
               <div>
                 <span className={'inline-flex items-center gap-1.5 text-[11px] font-display font-bold px-2.5 py-1 rounded-full ' + info.className}>
@@ -180,6 +220,37 @@ export default async function EvvPage({ searchParams }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// One clock event: time, where the caregiver said they were, and how far
+// the GPS fix was from the client's home (red when they said "client's
+// home" but were beyond the agency's radius). Links to the map.
+function ClockCell({ time, lat, lng, where, distance, radius }) {
+  const place = visitLocationLabel(where);
+  const dist = formatDistance(distance);
+  const far = where === 'member_home' && typeof distance === 'number' && distance > radius;
+  const href = mapLink(lat, lng);
+  return (
+    <div className="flex flex-col">
+      <span className="flex items-center gap-1">
+        {time || '—'}
+        {typeof lat === 'number' && (
+          <span title="GPS location captured" className="text-[10px] text-[var(--success)]">●</span>
+        )}
+      </span>
+      {(place || dist) && (
+        <span className={'text-[11px] leading-snug ' + (far ? 'text-[var(--danger)] font-display font-bold' : 'text-[var(--muted)]')}>
+          {place}
+          {dist && (href ? (
+            <>
+              {' · '}
+              <a href={href} target="_blank" rel="noopener noreferrer" className="underline">{dist}</a>
+            </>
+          ) : ` · ${dist}`)}
+        </span>
+      )}
     </div>
   );
 }

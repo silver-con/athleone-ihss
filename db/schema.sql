@@ -92,6 +92,9 @@ CREATE TABLE IF NOT EXISTS organizations (
   -- SHORTER internal deadline, never a longer one — lib/queries.js
   -- updateOrganizationEvvSettings enforces that against the state profile.
   visit_maintenance_window_days integer CHECK (visit_maintenance_window_days IS NULL OR (visit_maintenance_window_days >= 1 AND visit_maintenance_window_days <= 365)),
+  -- How close (in feet) a GPS clock event must be to the client's home to
+  -- count as "at home" — Vesta uses 250 ft. Added 2026-09-24.
+  home_radius_feet              integer NOT NULL DEFAULT 250 CHECK (home_radius_feet >= 50 AND home_radius_feet <= 2000),
   created_at                    timestamptz NOT NULL DEFAULT now()
 );
 
@@ -217,7 +220,18 @@ CREATE TABLE IF NOT EXISTS clients (
   address_line1         text,
   city                  text,
   state                 text CHECK (state IS NULL OR state ~ '^[A-Z]{2}$'),
-  zip                   text CHECK (zip IS NULL OR zip ~ '^[0-9]{5}(-[0-9]{4})?$')
+  zip                   text CHECK (zip IS NULL OR zip ~ '^[0-9]{5}(-[0-9]{4})?$'),
+  -- The client's home location, used to show how far each clock event was
+  -- from home (Vesta's "Distance In/Out"). Added 2026-09-24. Hearth has no
+  -- geocoding service, so it is either LEARNED from the first accurate GPS
+  -- clock-in a caregiver marks as "Client's home", taken by staff from a
+  -- specific visit's clock-in, or entered by staff (e.g. pasted from a
+  -- map). home_location_source records which.
+  home_lat              double precision CHECK (home_lat IS NULL OR (home_lat >= -90 AND home_lat <= 90)),
+  home_lng              double precision CHECK (home_lng IS NULL OR (home_lng >= -180 AND home_lng <= 180)),
+  home_location_source  text CHECK (home_location_source IS NULL OR home_location_source IN ('learned', 'from_visit', 'entered')),
+  home_location_set_at  timestamptz,
+  home_location_set_by  text
 );
 
 -- One Medicaid ID belongs to one client per agency — a duplicate almost
@@ -259,6 +273,16 @@ CREATE TABLE IF NOT EXISTS visits (
   evv_clock_out_lat       double precision,
   evv_clock_out_lng       double precision,
   evv_clock_out_accuracy  double precision,
+  -- Where the caregiver said they were at each clock event (Vesta's "Loc
+  -- In/Out": member_home, family_home, neighbor_home, community, other),
+  -- and how far the GPS fix was from the client's home at that moment
+  -- (NULL when either location is unknown). Stored rather than computed
+  -- later, so correcting a client's home location never rewrites what a
+  -- past visit showed. Added 2026-09-24.
+  evv_clock_in_location   text CHECK (evv_clock_in_location IS NULL OR evv_clock_in_location IN ('member_home', 'family_home', 'neighbor_home', 'community', 'other')),
+  evv_clock_out_location  text CHECK (evv_clock_out_location IS NULL OR evv_clock_out_location IN ('member_home', 'family_home', 'neighbor_home', 'community', 'other')),
+  evv_clock_in_distance_ft  double precision,
+  evv_clock_out_distance_ft double precision,
   evv_method      text,
   evv_verified    boolean NOT NULL DEFAULT false,
   evv_exception   text,

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/actions/auth';
 import * as db from '@/lib/queries';
+import { isVisitLocation } from '@/lib/geo';
 
 // Every action here re-checks that the visit/thread actually belongs to
 // the signed-in caregiver — the UI only ever shows a caregiver their own
@@ -31,7 +32,9 @@ function sanitizeGeo(geo) {
   return { lat, lng, accuracy: Number.isFinite(accuracy) ? accuracy : null };
 }
 
-export async function clockInAction(visitId, geo = null) {
+// `where`: the caregiver's pick of lib/geo.js VISIT_LOCATIONS (untrusted —
+// anything unrecognised falls back to the client's home).
+export async function clockInAction(visitId, geo = null, where = 'member_home') {
   const session = await requirePermission('caregiver.visit.clock');
   const visit = await db.getVisit(session.organizationId, visitId);
   if (!visit || visit.caregiverId !== session.caregiverId) return;
@@ -43,16 +46,16 @@ export async function clockInAction(visitId, geo = null) {
   if (!caregiver || caregiver.status !== 'active') {
     return { error: 'Your caregiver status is not active, so you can\'t start a visit. Contact your agency office.' };
   }
-  await db.clockIn(session.organizationId, visitId, null, sanitizeGeo(geo));
+  await db.clockIn(session.organizationId, visitId, null, sanitizeGeo(geo), isVisitLocation(where) ? where : 'member_home');
   revalidatePath('/caregiver/schedule');
   revalidatePath(`/caregiver/visit/${visitId}`);
 }
 
-export async function clockOutAction(visitId, geo = null) {
+export async function clockOutAction(visitId, geo = null, where = 'member_home') {
   const session = await requirePermission('caregiver.visit.clock');
   const visit = await db.getVisit(session.organizationId, visitId);
   if (!visit || visit.caregiverId !== session.caregiverId) return;
-  await db.clockOut(session.organizationId, visitId, null, sanitizeGeo(geo));
+  await db.clockOut(session.organizationId, visitId, null, sanitizeGeo(geo), isVisitLocation(where) ? where : 'member_home');
   revalidatePath('/caregiver/schedule');
   revalidatePath(`/caregiver/visit/${visitId}`);
 }

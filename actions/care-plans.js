@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/actions/auth';
 import * as db from '@/lib/queries';
+import { parseLatLng } from '@/lib/geo';
 
 // Turns the free-text "Purchased Tasks" line from a payer authorization
 // (e.g. "BATHING, Dressing, Exercise, Grooming (Shaving, Oral care, Nail
@@ -108,4 +109,69 @@ export async function updateClientEvvIdentityAction(prevState, formData) {
   revalidatePath(`/admin/clients/${clientId}/care-plan`);
   revalidatePath('/admin/clients');
   return { error: null, success: 'EVV identity saved.' };
+}
+
+function actorOf(session) {
+  return { userId: session.userId, name: session.name, role: session.role, locationId: session.locationId };
+}
+
+async function auditHome(session, clientId, detail) {
+  await db.logAuditEvent(session.organizationId, {
+    actorUserId: session.userId,
+    actorName: session.name,
+    actorRole: session.role,
+    locationId: session.locationId,
+    action: 'update_client_home_location',
+    entityType: 'client',
+    entityId: clientId,
+    // How it was set, never the coordinates themselves (a home address).
+    detail,
+  });
+}
+
+// Client home location (distance-from-home on EVV screens). Staff paste
+// coordinates or a map link; see lib/geo.js parseLatLng.
+export async function setClientHomeLocationAction(prevState, formData) {
+  const session = await requirePermission('admin.clients.evvIdentity.manage');
+  const clientId = String(formData.get('clientId') || '').trim();
+  const parsed = parseLatLng(formData.get('coordinates'));
+  if (!parsed) return { error: 'Paste coordinates like 26.075175, -97.473486 or a Google Maps link.', success: null };
+  try {
+    await db.setClientHomeLocation(session.organizationId, clientId, parsed, actorOf(session), session.locationId);
+  } catch (err) {
+    return { error: err.message || 'Could not save the home location.', success: null };
+  }
+  await auditHome(session, clientId, 'entered by staff');
+  revalidatePath(`/admin/clients/${clientId}/care-plan`);
+  return { error: null, success: 'Home location saved.' };
+}
+
+export async function clearClientHomeLocationAction(prevState, formData) {
+  const session = await requirePermission('admin.clients.evvIdentity.manage');
+  const clientId = String(formData.get('clientId') || '').trim();
+  try {
+    await db.clearClientHomeLocation(session.organizationId, clientId, session.locationId);
+  } catch (err) {
+    return { error: err.message || 'Could not clear the home location.', success: null };
+  }
+  await auditHome(session, clientId, 'cleared');
+  revalidatePath(`/admin/clients/${clientId}/care-plan`);
+  return { error: null, success: 'Home location cleared — it will be learned again from the next accurate GPS clock-in at home.' };
+}
+
+// From the visit maintenance page: "use this clock-in/out as the client's home".
+export async function setClientHomeFromVisitAction(prevState, formData) {
+  const session = await requirePermission('admin.clients.evvIdentity.manage');
+  const visitId = String(formData.get('visitId') || '').trim();
+  const which = String(formData.get('which') || '') === 'out' ? 'out' : 'in';
+  let clientId;
+  try {
+    clientId = await db.setClientHomeFromVisit(session.organizationId, visitId, which, actorOf(session), session.locationId);
+  } catch (err) {
+    return { error: err.message || 'Could not update the home location.', success: null };
+  }
+  await auditHome(session, clientId, `taken from visit ${visitId} clock-${which}`);
+  revalidatePath(`/admin/evv/visits/${visitId}`);
+  revalidatePath(`/admin/clients/${clientId}/care-plan`);
+  return { error: null, success: "Saved as the client's home location. Future visits measure distance from here." };
 }

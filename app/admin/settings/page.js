@@ -24,6 +24,7 @@ export default async function AdminSettingsPage() {
           flexibleHoursEnabled: Boolean(organization?.flexibleHoursEnabled),
           flexibleHoursGraceMinutes: organization?.flexibleHoursGraceMinutes ?? 20,
           visitMaintenanceWindowDays: organization?.visitMaintenanceWindowDays ?? null,
+          homeRadiusFeet: organization?.homeRadiusFeet ?? 250,
         }}
         stateDays={profile?.visitMaintenanceWindowDays ?? null}
         stateName={profile?.stateName || organization?.state || 'Your state'}

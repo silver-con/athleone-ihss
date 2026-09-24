@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { clockInAction, clockOutAction } from '@/actions/caregiver';
+import { VISIT_LOCATIONS } from '@/lib/geo';
 
 // Best-effort device geolocation, captured immediately before a clock
 // event. Never blocks or rejects — a caregiver who denies location access,
@@ -30,17 +31,41 @@ function captureGeo() {
   });
 }
 
+// "Where are you?" — Vesta's location categories, asked at clock-in and
+// again at clock-out. Defaults to the client's home, the overwhelmingly
+// common case; the caregiver changes it when the service is elsewhere
+// (a doctor's visit, the grocery store, a family member's house).
+function WherePicker({ value, onChange, disabled }) {
+  return (
+    <label className="flex items-center justify-between gap-3 mb-2.5 text-[12.5px]">
+      <span className="font-display font-bold text-[var(--muted)]">Where are you?</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-[13px] bg-white min-w-0"
+      >
+        {VISIT_LOCATIONS.map((l) => (
+          <option key={l.value} value={l.value}>{l.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function ClockInButton({ visitId, className, children }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState(null);
+  const [where, setWhere] = useState('member_home');
   return (
     <>
+      <WherePicker value={where} onChange={setWhere} disabled={pending} />
       <button
         onClick={() => {
           setError(null);
           startTransition(async () => {
             const geo = await captureGeo();
-            const result = await clockInAction(visitId, geo);
+            const result = await clockInAction(visitId, geo, where);
             if (result?.error) setError(result.error);
           });
         }}
@@ -60,18 +85,22 @@ export function ClockInButton({ visitId, className, children }) {
 
 export function ClockOutButton({ visitId, className, children }) {
   const [pending, startTransition] = useTransition();
+  const [where, setWhere] = useState('member_home');
   return (
-    <button
-      onClick={() => {
-        startTransition(async () => {
-          const geo = await captureGeo();
-          await clockOutAction(visitId, geo);
-        });
-      }}
-      disabled={pending}
-      className={className}
-    >
-      {pending ? 'Clocking out…' : children || 'Clock Out'}
-    </button>
+    <>
+      <WherePicker value={where} onChange={setWhere} disabled={pending} />
+      <button
+        onClick={() => {
+          startTransition(async () => {
+            const geo = await captureGeo();
+            await clockOutAction(visitId, geo, where);
+          });
+        }}
+        disabled={pending}
+        className={className}
+      >
+        {pending ? 'Clocking out…' : children || 'Clock Out'}
+      </button>
+    </>
   );
 }

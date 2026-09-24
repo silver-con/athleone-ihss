@@ -13,6 +13,8 @@ import { getComplianceProfile, getReasonCodeInfo, selectableReasonCodes } from '
 import { visitStatusInfo } from '@/lib/styles';
 import VisitMaintenanceForm from '@/components/admin/VisitMaintenanceForm';
 import VisitVmurForm from '@/components/admin/VisitVmurForm';
+import HomeFromVisitButton from '@/components/admin/HomeFromVisitButton';
+import { visitLocationLabel, formatDistance, mapLink } from '@/lib/geo';
 
 const CONTACT_LABEL = {
   none: 'No contact needed',
@@ -79,6 +81,8 @@ export default async function VisitMaintenancePage({ params }) {
     visit.evv?.exception && profile?.reasonCodes?.[visit.evv.exception]?.selectable !== false
       ? [visit.evv.exception]
       : [];
+  const radius = organization?.homeRadiusFeet ?? 250;
+  const hasHome = client?.homeLat !== null && client?.homeLat !== undefined;
   const hasSomethingToFix = (visit.evv?.exception && !visit.resolved) || (visit.status === 'in-progress' && !hasOut);
 
   return (
@@ -163,12 +167,10 @@ export default async function VisitMaintenancePage({ params }) {
             <Row label="Date of service">{formatDate(visit.serviceDate)}</Row>
             <Row label="Scheduled">{visit.start} – {visit.end}</Row>
             <Row label="Clock-in">
-              {visit.evv?.clockIn || 'Not recorded'}
-              {typeof visit.evv?.clockInLat === 'number' && <span title="GPS captured" className="ml-1 text-[10px] text-[var(--success)]">●</span>}
+              <ClockEvent visitId={visit.id} which="in" evv={visit.evv} radius={radius} hasHome={hasHome} />
             </Row>
             <Row label="Clock-out">
-              {visit.evv?.clockOut || 'Not recorded'}
-              {typeof visit.evv?.clockOutLat === 'number' && <span title="GPS captured" className="ml-1 text-[10px] text-[var(--success)]">●</span>}
+              <ClockEvent visitId={visit.id} which="out" evv={visit.evv} radius={radius} hasHome={hasHome} />
             </Row>
             <Row label="Method">{visit.evv?.method || '—'}</Row>
             <Row label="Status">
@@ -224,5 +226,42 @@ export default async function VisitMaintenancePage({ params }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// One clock event on the visit record: time, where the caregiver said they
+// were, distance from the client's home (red if they said "client's home"
+// but GPS was beyond the radius), a map link, and — when there's a GPS
+// fix — a way to adopt it as the client's home location.
+function ClockEvent({ visitId, which, evv, radius, hasHome }) {
+  const time = which === 'in' ? evv?.clockIn : evv?.clockOut;
+  const lat = which === 'in' ? evv?.clockInLat : evv?.clockOutLat;
+  const lng = which === 'in' ? evv?.clockInLng : evv?.clockOutLng;
+  const where = which === 'in' ? evv?.clockInLocation : evv?.clockOutLocation;
+  const distance = which === 'in' ? evv?.clockInDistanceFt : evv?.clockOutDistanceFt;
+  const place = visitLocationLabel(where);
+  const dist = formatDistance(distance);
+  const far = where === 'member_home' && typeof distance === 'number' && distance > radius;
+  const href = mapLink(lat, lng);
+  if (!time) return <span>Not recorded</span>;
+  return (
+    <span className="flex flex-col items-end gap-0.5">
+      <span>
+        {time}
+        {typeof lat === 'number' && <span title="GPS captured" className="ml-1 text-[10px] text-[var(--success)]">●</span>}
+      </span>
+      {(place || dist || href) && (
+        <span className={'text-[11.5px] ' + (far ? 'text-[var(--danger)] font-display font-bold' : 'text-[var(--muted)]')}>
+          {[place, dist ? `${dist} from home` : hasHome || !href ? null : 'home location not set'].filter(Boolean).join(' · ')}
+          {href && (
+            <>
+              {' · '}
+              <a href={href} target="_blank" rel="noopener noreferrer" className="underline">map</a>
+            </>
+          )}
+        </span>
+      )}
+      {href && <HomeFromVisitButton visitId={visitId} which={which} />}
+    </span>
   );
 }

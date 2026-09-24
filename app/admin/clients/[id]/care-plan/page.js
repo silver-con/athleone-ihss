@@ -5,6 +5,8 @@ import { getClient, getServiceAuthorizations, getOrientationsForClient, getCareg
 import { createAuthorizationAction } from '@/actions/care-plans';
 import { createOrientationAction } from '@/actions/orientations';
 import ClientEvvIdentityForm from '@/components/admin/ClientEvvIdentityForm';
+import ClientHomeLocationForm from '@/components/admin/ClientHomeLocationForm';
+import { mapLink } from '@/lib/geo';
 
 const STATUS_STYLES = {
   approved: 'bg-[oklch(94%_0.06_155)] text-[oklch(38%_0.1_155)]',
@@ -90,6 +92,21 @@ export default async function ClientCarePlanPage({ params }) {
           </p>
         )}
         <ClientEvvIdentityForm client={client} />
+        <ClientHomeLocationForm
+          clientId={client.id}
+          home={
+            client.homeLat !== null && client.homeLat !== undefined
+              ? {
+                  source: client.homeLocationSource,
+                  setAt: client.homeLocationSetAt
+                    ? new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(client.homeLocationSetAt))
+                    : null,
+                  setBy: client.homeLocationSetBy,
+                  mapHref: mapLink(client.homeLat, client.homeLng),
+                }
+              : null
+          }
+        />
       </div>
 
       <div className="flex flex-col gap-4 mt-6">

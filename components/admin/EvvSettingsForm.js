@@ -59,6 +59,27 @@ export default function EvvSettingsForm({ organization, stateDays, stateName }) 
         </label>
       </section>
 
+      <section className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6">
+        <div className="font-display font-extrabold text-[15px]">&ldquo;At home&rdquo; radius</div>
+        <p className="text-[12.5px] text-[var(--muted)] mt-1 max-w-[640px]">
+          When a caregiver clocks in or out as &ldquo;Client&rsquo;s home&rdquo; but their GPS is farther than this from the
+          client&rsquo;s home location, the EVV screens highlight the distance for review. Vesta uses 250 feet.
+        </p>
+        <label className="flex flex-col gap-1.5 mt-4 text-[12.5px] font-display font-bold max-w-[260px]">
+          Feet
+          <input
+            name="homeRadiusFeet"
+            type="number"
+            min={50}
+            max={2000}
+            step={1}
+            required
+            defaultValue={organization.homeRadiusFeet ?? 250}
+            className={field}
+          />
+        </label>
+      </section>
+
       <div className="flex items-center gap-3">
         <button
           type="submit"

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getVisit, getClient, getOrganization } from '@/lib/queries';
 import { shortDayLabel } from '@/lib/calendar';
+import { visitLocationLabel } from '@/lib/geo';
 import { getComplianceProfile, getReasonCodeInfo } from '@/lib/state-compliance';
 import { visitStatusInfo } from '@/lib/styles';
 import { ClockInButton, ClockOutButton } from '@/components/caregiver/ClockButton';
@@ -14,8 +15,9 @@ import BackButton from './BackButton';
 // (denied permission, no signal, or a pre-2026-09-22 visit clocked in
 // before location capture existed) — not an error, just a fact worth
 // surfacing since EVV counts location as one of its six required elements.
-function LocationBadge({ lat, lng }) {
+function LocationBadge({ lat, lng, where }) {
   const hasLocation = typeof lat === 'number' && typeof lng === 'number';
+  const place = visitLocationLabel(where);
   return (
     <span
       className={
@@ -26,7 +28,7 @@ function LocationBadge({ lat, lng }) {
       }
     >
       <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'currentColor' }} />
-      {hasLocation ? 'Location on' : 'No location'}
+      {place ? `${place} · ` : ''}{hasLocation ? 'location on' : 'no location'}
     </span>
   );
 }
@@ -98,7 +100,7 @@ export default async function VisitDetailPage({ params }) {
               <span className="font-display font-bold">{visit.evv?.clockIn}</span>
             </div>
             <div className="flex justify-end mb-3">
-              <LocationBadge lat={visit.evv?.clockInLat} lng={visit.evv?.clockInLng} />
+              <LocationBadge lat={visit.evv?.clockInLat} lng={visit.evv?.clockInLng} where={visit.evv?.clockInLocation} />
             </div>
             <ClockOutButton
               visitId={visit.id}
@@ -113,14 +115,14 @@ export default async function VisitDetailPage({ params }) {
               <span className="text-[var(--muted)]">Clock-in</span>
               <span className="flex items-center gap-2">
                 <span className="font-display font-bold">{visit.evv.clockIn || '—'}</span>
-                <LocationBadge lat={visit.evv.clockInLat} lng={visit.evv.clockInLng} />
+                <LocationBadge lat={visit.evv.clockInLat} lng={visit.evv.clockInLng} where={visit.evv.clockInLocation} />
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-[var(--muted)]">Clock-out</span>
               <span className="flex items-center gap-2">
                 <span className="font-display font-bold">{visit.evv.clockOut || '—'}</span>
-                <LocationBadge lat={visit.evv.clockOutLat} lng={visit.evv.clockOutLng} />
+                <LocationBadge lat={visit.evv.clockOutLat} lng={visit.evv.clockOutLng} where={visit.evv.clockOutLocation} />
               </span>
             </div>
             {visit.evv.exception && (
