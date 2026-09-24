@@ -27,17 +27,57 @@ export async function assignCaregiverAction(clientId, caregiverId) {
   revalidatePath('/admin');
 }
 
-export async function resolveVisitExceptionAction(visitId) {
+// Visit maintenance — the audited replacement for the old one-click
+// "Mark reviewed" / "Submit VMUR" buttons (removed 2026-09-23). Both go
+// through lib/queries.js, which enforces HHSC's rules; see
+// performVisitMaintenance / recordVisitVmur there.
+export async function performVisitMaintenanceAction(prevState, formData) {
   const session = await requirePermission('admin.evv.exceptions.manage');
-  await db.resolveVisitException(session.organizationId, visitId, session.locationId);
-  revalidatePath('/admin/evv');
-  revalidatePath('/admin/compliance');
-  revalidatePath('/admin');
+  const visitId = String(formData.get('visitId') || '').trim();
+  try {
+    await db.performVisitMaintenance(
+      session.organizationId,
+      visitId,
+      {
+        contact: String(formData.get('contact') || ''),
+        reasonCodes: formData.getAll('reasonCodes').map(String),
+        note: String(formData.get('note') || ''),
+        manualClockIn: String(formData.get('manualClockIn') || ''),
+        manualClockOut: String(formData.get('manualClockOut') || ''),
+        verified: formData.get('verified') === 'on',
+      },
+      { userId: session.userId, name: session.name, role: session.role, locationId: session.locationId }
+    );
+  } catch (err) {
+    return { error: err.message || 'Could not save the visit maintenance.', success: null };
+  }
+  revalidateVisitPages(visitId);
+  return { error: null, success: 'Visit maintenance saved and verified.' };
 }
 
-export async function submitVMURAction(visitId) {
+export async function recordVisitVmurAction(prevState, formData) {
   const session = await requirePermission('admin.evv.exceptions.manage');
-  await db.submitVMUR(session.organizationId, visitId, session.locationId);
+  const visitId = String(formData.get('visitId') || '').trim();
+  try {
+    await db.recordVisitVmur(
+      session.organizationId,
+      visitId,
+      {
+        justification: String(formData.get('justification') || ''),
+        payerReference: String(formData.get('payerReference') || ''),
+      },
+      { userId: session.userId, name: session.name, role: session.role, locationId: session.locationId }
+    );
+  } catch (err) {
+    return { error: err.message || 'Could not record the VMUR.', success: null };
+  }
+  revalidateVisitPages(visitId);
+  return { error: null, success: 'VMUR recorded.' };
+}
+
+function revalidateVisitPages(visitId) {
+  revalidatePath(`/admin/evv/visits/${visitId}`);
+  revalidatePath('/admin/evv');
   revalidatePath('/admin/compliance');
   revalidatePath('/admin');
 }

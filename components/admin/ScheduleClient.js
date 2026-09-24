@@ -377,7 +377,7 @@ function VisitDetail({ visit, caregivers, clients, serviceAuthorizations = [] })
 
             {visit.evv.exception && (
               <div className="col-span-2 mt-1 bg-[var(--danger-soft)] text-[var(--danger)] rounded-[10px] px-3 py-2.5 text-[12.5px] font-display font-semibold">
-                Code {visit.evv.exception} — {reasonCodes[visit.evv.exception]?.label || 'Unknown reason code'}
+                Code {visit.evv.exception} — {(reasonCodes[visit.evv.exception] || reasonCodes[String(visit.evv.exception).slice(0, 3)])?.label || 'Unknown reason code'}
               </div>
             )}
           </div>

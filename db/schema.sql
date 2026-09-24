@@ -86,6 +86,12 @@ CREATE TABLE IF NOT EXISTS organizations (
   -- limitation is fixed. Turn this on per-org only once that's true.
   flexible_hours_enabled        boolean NOT NULL DEFAULT false,
   flexible_hours_grace_minutes  integer NOT NULL DEFAULT 20 CHECK (flexible_hours_grace_minutes >= 0 AND flexible_hours_grace_minutes <= 480),
+  -- Agency's own deadline (days after the date of service) for finishing
+  -- visit maintenance, added 2026-09-23. NULL = use the state's window
+  -- (Texas: 95 days, HHSC EVV Policy Handbook §9050). An agency may set a
+  -- SHORTER internal deadline, never a longer one — lib/queries.js
+  -- updateOrganizationEvvSettings enforces that against the state profile.
+  visit_maintenance_window_days integer CHECK (visit_maintenance_window_days IS NULL OR (visit_maintenance_window_days >= 1 AND visit_maintenance_window_days <= 365)),
   created_at                    timestamptz NOT NULL DEFAULT now()
 );
 
@@ -264,6 +270,35 @@ CREATE TABLE IF NOT EXISTS visits (
   -- statement FK reference to a not-yet-existing table would fail on a
   -- fresh database. See that ALTER for the full explanation.
 );
+
+-- Visit maintenance log, added 2026-09-23. One row per correction or
+-- VMUR (Visit Maintenance Unlock Request) record, never updated or
+-- deleted — the auditable "why was this visit changed, by whom, and who
+-- confirmed it" trail HHSC expects (EVV Policy Handbook §9000/§10000).
+--   kind 'maintenance': contact -> document (reason codes, note, any
+--     missing clock time entered by hand) -> verify.
+--   kind 'vmur': the visit was past the maintenance window; records that
+--     an unlock request was sent to the payer, with the justification.
+-- Captured clock times and GPS are never edited (HHSC §9000: actual
+-- clock in/out times, hours worked and GPS can't be changed); only a
+-- MISSING time can be entered, and that is recorded here as manual.
+CREATE TABLE IF NOT EXISTS visit_maintenance (
+  id                 text PRIMARY KEY,
+  organization_id    text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  visit_id           text NOT NULL REFERENCES visits(id) ON DELETE CASCADE,
+  kind               text NOT NULL DEFAULT 'maintenance' CHECK (kind IN ('maintenance', 'vmur')),
+  contact            text CHECK (contact IS NULL OR contact IN ('none', 'client', 'caregiver', 'substitute')),
+  reason_codes       text[] NOT NULL DEFAULT '{}',
+  note               text,
+  manual_clock_in_at  timestamptz,
+  manual_clock_out_at timestamptz,
+  payer_reference    text,
+  performed_by_user_id text,
+  performed_by_name  text NOT NULL,
+  performed_by_role  text NOT NULL,
+  created_at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_visit_maintenance_visit ON visit_maintenance(organization_id, visit_id, created_at);
 
 CREATE TABLE IF NOT EXISTS messages (
   id              text PRIMARY KEY,

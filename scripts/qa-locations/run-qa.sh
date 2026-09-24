@@ -36,7 +36,7 @@ echo "==> schema loaded into $DB_NAME"
 #    node can't resolve (Next's tsconfig paths only apply inside Next).
 cp "$REPO/lib/queries.js" "$REPO/lib/db.js" "$REPO/lib/data.js" "$REPO/lib/state-compliance.js" "$REPO/lib/evv-mapping.js" "$REPO/lib/permissions.js" "$REPO/lib/client-identity.js" "$REPO/lib/passwords.js" "$WORK/"
 sed -i.bak   -e "s|from '@/lib/db'|from './db.js'|"   -e "s|from '@/lib/data'|from './data.js'|"   -e "s|from '@/lib/state-compliance'|from './state-compliance.js'|"   -e "s|from '@/lib/evv-mapping'|from './evv-mapping.js'|"   -e "s|from '@/lib/client-identity'|from './client-identity.js'|"   "$WORK/queries.js" "$WORK/evv-mapping.js" && rm -f "$WORK"/*.bak
-cp "$QA_DIR/qa.mjs" "$QA_DIR/qa-regression.mjs" "$QA_DIR/qa-roles.mjs" "$QA_DIR/qa-scoping.mjs" "$QA_DIR/qa-referral-create.mjs" "$QA_DIR/qa-multi-state.mjs" "$QA_DIR/qa-platform-dashboard.mjs" "$QA_DIR/qa-admin-dashboard.mjs" "$QA_DIR/qa-audit-log.mjs" "$QA_DIR/qa-client-evv-identity.mjs" "$QA_DIR/qa-access-control.mjs" "$WORK/"
+cp "$QA_DIR/qa.mjs" "$QA_DIR/qa-regression.mjs" "$QA_DIR/qa-roles.mjs" "$QA_DIR/qa-scoping.mjs" "$QA_DIR/qa-referral-create.mjs" "$QA_DIR/qa-multi-state.mjs" "$QA_DIR/qa-platform-dashboard.mjs" "$QA_DIR/qa-admin-dashboard.mjs" "$QA_DIR/qa-audit-log.mjs" "$QA_DIR/qa-client-evv-identity.mjs" "$QA_DIR/qa-access-control.mjs" "$QA_DIR/qa-visit-maintenance.mjs" "$WORK/"
 printf '{\n  "type": "module"\n}\n' > "$WORK/package.json"
 
 # 3. Reuse the repo's own installed pg driver rather than re-downloading.
@@ -72,6 +72,8 @@ psql -q -d "$DB_NAME" -c "TRUNCATE organizations CASCADE;" 2>/dev/null
 (cd "$WORK" && node qa-client-evv-identity.mjs) || STATUS=1
 psql -q -d "$DB_NAME" -c "TRUNCATE organizations CASCADE;" 2>/dev/null
 (cd "$WORK" && node qa-access-control.mjs) || STATUS=1
+psql -q -d "$DB_NAME" -c "TRUNCATE organizations CASCADE;" 2>/dev/null
+(cd "$WORK" && node qa-visit-maintenance.mjs) || STATUS=1
 
 # 5. Clean up the scratch database.
 dropdb --if-exists "$DB_NAME"

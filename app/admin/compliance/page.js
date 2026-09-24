@@ -1,18 +1,11 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { getVisits, getClients, getCaregivers, getOrganization } from '@/lib/queries';
+import { getVisits, getClients, getCaregivers, getOrganization, getMaintenanceStatus, getMaintenanceWindowDays } from '@/lib/queries';
 import BarChart from '@/components/charts/BarChart';
 import ExceptionActionButton from '@/components/admin/ExceptionActionButton';
-import { CURES_ACT_ELEMENTS, TODAY_ISO } from '@/lib/data';
-import { getComplianceProfile } from '@/lib/state-compliance';
+import { CURES_ACT_ELEMENTS } from '@/lib/data';
+import { getComplianceProfile, getReasonCodeInfo } from '@/lib/state-compliance';
 import { maintenanceUrgency } from '@/lib/styles';
-
-function daysRemaining(serviceDate, windowDays) {
-  const service = new Date(serviceDate + 'T00:00:00');
-  const today = new Date(TODAY_ISO + 'T00:00:00');
-  const elapsed = Math.round((today - service) / 86400000);
-  return windowDays - elapsed;
-}
 
 function formatServiceDate(iso) {
   const [y, m, d] = iso.split('-');
@@ -62,8 +55,11 @@ export default async function CompliancePage() {
   })();
 
   const maintenanceQueue = visits
-    .filter((v) => v.evv?.exception && !v.resolved)
-    .map((v) => ({ ...v, remaining: daysRemaining(v.serviceDate, profile.visitMaintenanceWindowDays) }))
+    // Same window rule as the visit maintenance page (real calendar date,
+    // the agency's own deadline if shorter than the state's). A visit with
+    // a VMUR already recorded waits on the payer, so it leaves this queue.
+    .filter((v) => v.evv?.exception && !v.resolved && !v.vmurSubmitted)
+    .map((v) => ({ ...v, remaining: getMaintenanceStatus(organization, v).daysRemaining ?? 0 }))
     .sort((a, b) => a.remaining - b.remaining);
 
   const closedOutQueue = visits.filter(
@@ -181,7 +177,7 @@ export default async function CompliancePage() {
         <div className="flex items-baseline justify-between">
           <div className="font-display font-extrabold text-[14.5px] mb-1">Visit maintenance queue</div>
           <p className="text-[12px] text-[var(--muted)]">
-            {profile.visitMaintenanceWindowDays}-day window to correct a visit before it locks
+            {getMaintenanceWindowDays(organization)}-day window to correct a visit before it locks
           </p>
         </div>
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden mt-2">
@@ -214,7 +210,7 @@ export default async function CompliancePage() {
                   <div className="text-[12px] text-[var(--muted)]">{formatServiceDate(v.serviceDate)}</div>
                   <div>
                     <div className="text-[12.5px] font-display font-semibold">
-                      {v.evv.exception} — {profile.reasonCodes[v.evv.exception]?.label}
+                      {v.evv.exception} — {getReasonCodeInfo(profile, v.evv.exception)?.label}
                     </div>
                     {v.evv.note && (
                       <div className="text-[11.5px] text-[var(--muted)] mt-0.5 leading-snug">{v.evv.note}</div>
@@ -251,12 +247,12 @@ export default async function CompliancePage() {
             <div>Meaning</div>
             <div>Note required</div>
           </div>
-          {Object.entries(profile.reasonCodes).map(([code, info]) => (
+          {Object.entries(profile.reasonCodes).filter(([, info]) => info.selectable !== false).map(([code, info]) => (
             <div
               key={code}
               className="grid grid-cols-[0.6fr_2fr_1fr] px-5 py-2.5 text-[13px] items-center border-b border-[oklch(93%_0.01_85)] last:border-none"
             >
-              <div className="font-display font-bold">{code}</div>
+              <div className="font-display font-bold">{code.length > 3 ? `${code.slice(0, 3)} ${code.slice(3)}` : code}</div>
               <div>{info.label}</div>
               <div className="text-[12px] text-[var(--muted)]">{info.requiresNote ? 'Yes' : '—'}</div>
             </div>
