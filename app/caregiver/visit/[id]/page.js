@@ -9,6 +9,28 @@ import { ClockInButton, ClockOutButton } from '@/components/caregiver/ClockButto
 import TaskCheckbox from '@/components/caregiver/TaskCheckbox';
 import BackButton from './BackButton';
 
+// Small inline indicator of whether a clock event carried a real device
+// location. Absent lat/lng means the caregiver's device didn't provide one
+// (denied permission, no signal, or a pre-2026-09-22 visit clocked in
+// before location capture existed) — not an error, just a fact worth
+// surfacing since EVV counts location as one of its six required elements.
+function LocationBadge({ lat, lng }) {
+  const hasLocation = typeof lat === 'number' && typeof lng === 'number';
+  return (
+    <span
+      className={
+        'inline-flex items-center gap-1 text-[10.5px] font-display font-bold px-1.5 py-0.5 rounded-full ' +
+        (hasLocation
+          ? 'bg-[var(--success-soft)] text-[var(--success)]'
+          : 'bg-[var(--danger-soft)] text-[var(--muted)]')
+      }
+    >
+      <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'currentColor' }} />
+      {hasLocation ? 'Location on' : 'No location'}
+    </span>
+  );
+}
+
 export default async function VisitDetailPage({ params }) {
   const session = await getSession();
   if (!session?.caregiverId) redirect('/login');
@@ -72,9 +94,12 @@ export default async function VisitDetailPage({ params }) {
 
         {visit.status === 'in-progress' && (
           <>
-            <div className="flex justify-between text-[13px] mb-3">
+            <div className="flex justify-between items-center text-[13px] mb-1">
               <span className="text-[var(--muted)]">Clocked in</span>
               <span className="font-display font-bold">{visit.evv?.clockIn}</span>
+            </div>
+            <div className="flex justify-end mb-3">
+              <LocationBadge lat={visit.evv?.clockInLat} lng={visit.evv?.clockInLng} />
             </div>
             <ClockOutButton
               visitId={visit.id}
@@ -85,13 +110,19 @@ export default async function VisitDetailPage({ params }) {
 
         {(visit.status === 'completed' || visit.status === 'missed') && visit.evv && (
           <div className="flex flex-col gap-2 text-[13px]">
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-[var(--muted)]">Clock-in</span>
-              <span className="font-display font-bold">{visit.evv.clockIn || '—'}</span>
+              <span className="flex items-center gap-2">
+                <span className="font-display font-bold">{visit.evv.clockIn || '—'}</span>
+                <LocationBadge lat={visit.evv.clockInLat} lng={visit.evv.clockInLng} />
+              </span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-[var(--muted)]">Clock-out</span>
-              <span className="font-display font-bold">{visit.evv.clockOut || '—'}</span>
+              <span className="flex items-center gap-2">
+                <span className="font-display font-bold">{visit.evv.clockOut || '—'}</span>
+                <LocationBadge lat={visit.evv.clockOutLat} lng={visit.evv.clockOutLng} />
+              </span>
             </div>
             {visit.evv.exception && (
               <div className="mt-1 bg-[var(--danger-soft)] text-[var(--danger)] rounded-[10px] px-3 py-2.5 text-[12.5px] font-display font-semibold">

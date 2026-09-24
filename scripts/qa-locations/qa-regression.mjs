@@ -21,6 +21,13 @@ const ORG = 'org-r';
 
 async function run() {
   await query(`INSERT INTO organizations (id,name,status) VALUES ($1,'Regression Agency','active')`, [ORG]);
+  // Explicit even though false is now the column default — this suite's
+  // existing clockOut assertions below (resolved === true, no exception)
+  // predate the flexible-hours grace-period check added 2026-09-23 and
+  // aren't testing it, so keep it off here regardless of the default; see
+  // the dedicated "flexible-hours grace-period check" section near the
+  // end of this file for the feature's own tests.
+  await query(`UPDATE organizations SET flexible_hours_enabled = false WHERE id = $1`, [ORG]);
   const locId = await db.createLocation(ORG, { name: 'Branch One', commissionRate: 10 });
 
   const cg = await db.createCaregiverWithLogin(ORG, {
@@ -130,8 +137,18 @@ async function run() {
   await db.clockIn(ORG, 'rv1', locId);
   const inProgress = await db.getVisit(ORG, 'rv1');
   eq('clockIn set status in-progress', inProgress.status, 'in-progress');
-  eq('clockIn recorded an EVV clock-in', inProgress.evv?.clockIn, 'Just now');
-  eq('clockIn set the GPS method', inProgress.evv?.method, 'GPS mobile check-in');
+  // 2026-09-22: clockIn now writes a real formatted time label (e.g.
+  // "2:47 PM") and a real evv_clock_in_at timestamp instead of the old
+  // literal 'Just now' placeholder — assert the shape rather than a fixed
+  // string, since the actual value depends on when this test runs.
+  check('clockIn recorded a real 12-hour EVV clock-in time label',
+    /^\d{1,2}:\d{2}\s(AM|PM)$/.test(inProgress.evv?.clockIn || ''),
+    `got ${JSON.stringify(inProgress.evv?.clockIn)}`);
+  check('clockIn recorded a real clockInAt timestamp', inProgress.evv?.clockInAt != null);
+  check('clockIn recorded no coordinates (QA harness passes no geo)',
+    inProgress.evv?.clockInLat == null && inProgress.evv?.clockInLng == null);
+  eq('clockIn set the no-location method (QA harness passes no geo)',
+    inProgress.evv?.method, 'Mobile check-in (no location)');
 
   await db.clockOut(ORG, 'rv1', locId);
   const done = await db.getVisit(ORG, 'rv1');
@@ -247,11 +264,103 @@ async function run() {
     soloLine?.serviceCode, 'S5128');
 
   console.log('\n== unrated authorization: revenue must NOT silently count as $0 ==');
+  // NOTE: by this point in the file the same location/org also carries the
+  // disambiguated visit (8 units x $25 = $200, on explicitUnitsAuthId) and
+  // the solo-authorization visit (4 units x $40 = $160, on soloAuthId) added
+  // by the billing-ambiguity-fix tests above -- this block used to assume
+  // it was the only billing activity in the fixture and asserted the whole
+  // location's revenue/ratedLineCount went to exactly 0, which stopped being
+  // true the moment those tests started sharing this location. The correct
+  // assertion is that removing THIS ONE authorization's rate demotes only
+  // ITS line (240 = 8 units x $30) to unrated, leaving the other two
+  // untouched -- not that it zeroes out the whole location.
+  const beforeNoRate = await db.getLocationRevenueSummary(ORG);
   await query(`UPDATE service_authorizations SET rate_per_unit = NULL WHERE id = $1`, [authId]);
   const noRate = await db.getLocationRevenueSummary(ORG);
-  eq('revenue drops to 0 when the rate is removed', noRate[0].revenue, 0);
-  eq('the line is now reported as unrated', noRate[0].unratedLineCount, 1);
-  eq('and no longer counted as rated', noRate[0].ratedLineCount, 0);
+  eq('revenue drops by exactly this authorization\'s own billed amount ($240), not to 0',
+    noRate[0].revenue, beforeNoRate[0].revenue - 240);
+  eq('the line is now reported as unrated', noRate[0].unratedLineCount, beforeNoRate[0].unratedLineCount + 1);
+  eq('and no longer counted as rated (only this line, not the other authorizations\' lines)',
+    noRate[0].ratedLineCount, beforeNoRate[0].ratedLineCount - 1);
+
+  console.log('\n== flexible-hours grace-period check (per-org configurator setting, added 2026-09-23) ==');
+  // Separate org from ORG above so this feature's default (false) and its
+  // on/off behavior can be exercised without touching the assertions above,
+  // which predate this feature and explicitly opt out of it.
+  const FH_ORG = 'org-fh';
+  await query(`INSERT INTO organizations (id,name,status) VALUES ($1,'Flexible Hours QA Agency','active')`, [FH_ORG]);
+
+  const fhDefaults = await db.getOrganization(FH_ORG);
+  eq('flexible_hours_enabled defaults to false (opt-in -- see the migration file for why: ' +
+    'lib/data.js WEEK_DAYS is a fixed demo week, not the real rolling date)',
+    fhDefaults.flexibleHoursEnabled, false);
+  eq('flexible_hours_grace_minutes defaults to 20', fhDefaults.flexibleHoursGraceMinutes, 20);
+
+  const fhCg = await db.createCaregiverWithLogin(FH_ORG, {
+    name: 'FH CG', role: 'Aide', phone: '1', email: 'fh@x.test', passwordHash: 'x',
+  });
+  await query(
+    `INSERT INTO referrals (id,organization_id,payer,client_name,dob,service,auth_hours,auth_number,diagnosis,received_date,status)
+     VALUES ('fh-r1',$1,'Medicaid','FH Client','01/01/1950','PAS','20','A','DX','09/01/2026','new')`, [FH_ORG]
+  );
+  await db.submitIntake(FH_ORG, 'fh-r1', { clientName: 'FH Client', authHours: '20 hrs/wk', careNeeds: [] });
+  const fhClientId = 'c-fh-r1';
+
+  // WEEK_DAYS in lib/data.js is a fixed demo reference week (2026-09-14
+  // through 2026-09-20) -- any visit scheduled through createVisit() has a
+  // scheduled end date well in the past by the time this suite actually
+  // runs, which is exactly why the feature defaults to disabled. That
+  // staleness doubles as a reliable "way past the grace period" fixture
+  // here without needing to fake the clock.
+  const fhLateVisitId = await db.createVisit(
+    FH_ORG, { caregiverId: fhCg, clientId: fhClientId, day: 'wed', startTime: '9:00 AM', endTime: '11:00 AM' }
+  );
+
+  await db.clockIn(FH_ORG, fhLateVisitId);
+  await db.clockOut(FH_ORG, fhLateVisitId);
+  const disabledResult = await db.getVisit(FH_ORG, fhLateVisitId);
+  eq('disabled (the default): a way-late clock-out is still marked resolved', disabledResult.resolved, true);
+  eq('  ...and carries no exception code', disabledResult.evv?.exception, null);
+
+  await db.updateOrganizationFlexibleHours(FH_ORG, { enabled: true, graceMinutes: 20 });
+  const fhLateVisitId2 = await db.createVisit(
+    FH_ORG, { caregiverId: fhCg, clientId: fhClientId, day: 'thu', startTime: '9:00 AM', endTime: '11:00 AM' }
+  );
+  await db.clockIn(FH_ORG, fhLateVisitId2);
+  await db.clockOut(FH_ORG, fhLateVisitId2);
+  const enabledResult = await db.getVisit(FH_ORG, fhLateVisitId2);
+  eq('enabled: a clock-out well past the grace period raises reason code 110A',
+    enabledResult.evv?.exception, '110A');
+  eq('  ...and is left UNresolved so it surfaces as an open exception on /admin/evv',
+    enabledResult.resolved, false);
+  check('  ...and a human-readable note explains why',
+    typeof enabledResult.evv?.note === 'string' && enabledResult.evv.note.includes('grace period'),
+    `got ${JSON.stringify(enabledResult.evv?.note)}`);
+
+  // A visit whose scheduled end is genuinely still in the future (raw
+  // insert -- createVisit only accepts days from the fixed demo week).
+  await query(
+    `INSERT INTO visits (id,organization_id,caregiver_id,client_id,day,service_date,start_time,end_time,status)
+     VALUES ('fh-future1',$1,$2,$3,null,'2099-12-31','9:00 AM','11:59 PM','scheduled')`,
+    [FH_ORG, fhCg, fhClientId]
+  );
+  await db.clockIn(FH_ORG, 'fh-future1');
+  await db.clockOut(FH_ORG, 'fh-future1');
+  const futureResult = await db.getVisit(FH_ORG, 'fh-future1');
+  eq('a clock-out well within a still-future scheduled end raises no exception',
+    futureResult.evv?.exception, null);
+  eq('  ...and is marked resolved as normal', futureResult.resolved, true);
+
+  await db.updateOrganizationFlexibleHours(FH_ORG, { enabled: false, graceMinutes: 45 });
+  const afterUpdate = await db.getOrganization(FH_ORG);
+  eq('updateOrganizationFlexibleHours: enabled round-trips', afterUpdate.flexibleHoursEnabled, false);
+  eq('  ...graceMinutes round-trips', afterUpdate.flexibleHoursGraceMinutes, 45);
+  await throws('rejects a negative grace period', () =>
+    db.updateOrganizationFlexibleHours(FH_ORG, { enabled: true, graceMinutes: -5 }), 'whole number');
+  await throws('rejects a grace period over 480 minutes', () =>
+    db.updateOrganizationFlexibleHours(FH_ORG, { enabled: true, graceMinutes: 1000 }), 'whole number');
+  await throws('rejects a non-numeric grace period', () =>
+    db.updateOrganizationFlexibleHours(FH_ORG, { enabled: true, graceMinutes: 'lots' }), 'whole number');
 }
 
 run().then(async () => {

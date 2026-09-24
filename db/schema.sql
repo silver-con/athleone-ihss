@@ -36,6 +36,10 @@
 -- Otherwise, for a disposable local/dev database: dropdb hearth && createdb
 -- hearth && npm run db:setup && npm run db:seed.
 --
+-- Same story again for flexible_hours_enabled / flexible_hours_grace_minutes
+-- below (added 2026-09-23) — run scripts/migrate-2026-09-23-flexible-hours.mjs
+-- against a pre-existing dev database rather than relying on this file.
+--
 -- state / medicaid_provider_number / state_license_number generalize what
 -- used to be Texas-only columns (state was implicitly always Texas;
 -- texas_medicaid_provider_number and hcssa_license_number were named
@@ -54,6 +58,34 @@ CREATE TABLE IF NOT EXISTS organizations (
   baa_signed                    boolean NOT NULL DEFAULT false,
   baa_signed_at                 timestamptz,
   status                        text NOT NULL DEFAULT 'trial' CHECK (status IN ('trial', 'active', 'suspended')),
+  -- Per-organization "configurator" settings — added 2026-09-23, first
+  -- entry of what's meant to grow into a shared settings surface rather
+  -- than one-off hardcoded constants (see the project doc
+  -- vesta-evv-feature-reference.md's "Full Configurator candidate-settings
+  -- assessment" section for the many other settings expected to join it —
+  -- reason-code requirements, the visit-maintenance window, GPS distance
+  -- thresholds, etc.). flexible_hours_enabled: when true, a caregiver's
+  -- actual clock-in/out times may differ from the scheduled visit window
+  -- (the agency's real requirement, confirmed by the user, is completing
+  -- the full scheduled/authorized hours within the same day, not matching
+  -- the clock times exactly). flexible_hours_grace_minutes: how far PAST
+  -- the visit's scheduled END time a clock-out can drift and still be
+  -- clean — later than that raises Texas reason code 110A ("Service
+  -- Delivery Exception — schedule variance", lib/state-compliance.js) for
+  -- office review via the existing resolveVisitException flow. See
+  -- clockOut() in lib/queries.js for where this is applied. Defaults to
+  -- DISABLED (false) — opt-in per org, same defensive default as the
+  -- other self-attested/off-by-default flags on this table
+  -- (provider_enrollment_attested, baa_signed). This matters more than
+  -- usual here: WEEK_DAYS/TODAY_ISO in lib/data.js are a fixed demo
+  -- reference week (2026-09-14 through 2026-09-20), not the real rolling
+  -- calendar date, so every visit scheduled through createVisit() today
+  -- already has a "scheduled end" in the past by the time it's clocked
+  -- out in real time — enabling this by default would flag nearly every
+  -- real clock-out as an exception until that separate, pre-existing
+  -- limitation is fixed. Turn this on per-org only once that's true.
+  flexible_hours_enabled        boolean NOT NULL DEFAULT false,
+  flexible_hours_grace_minutes  integer NOT NULL DEFAULT 20 CHECK (flexible_hours_grace_minutes >= 0 AND flexible_hours_grace_minutes <= 480),
   created_at                    timestamptz NOT NULL DEFAULT now()
 );
 
@@ -180,6 +212,26 @@ CREATE TABLE IF NOT EXISTS visits (
   vmur_submitted  boolean NOT NULL DEFAULT false,
   evv_clock_in    text,
   evv_clock_out   text,
+  -- Real captured wall-clock timestamps and device geolocation for each
+  -- EVV event, added 2026-09-22. evv_clock_in/evv_clock_out above remain
+  -- the human-readable display label ("2:47 PM"); these are the
+  -- authoritative values lib/evv-mapping.js's buildVisitPayload sends to
+  -- the state aggregator (two of the Cures Act's six required elements:
+  -- actual time and location) and what the admin EVV log and the
+  -- caregiver app both read for compliance visibility. Nullable because a
+  -- pre-existing visit, or a clock event where the caregiver's device
+  -- couldn't provide a location (permission denied, unsupported browser,
+  -- no signal), still has to be recorded rather than blocked — a missing
+  -- location here is a compliance exception for the office to review, not
+  -- a reason to stop a caregiver from clocking in or out of a real visit.
+  evv_clock_in_at        timestamptz,
+  evv_clock_in_lat        double precision,
+  evv_clock_in_lng        double precision,
+  evv_clock_in_accuracy   double precision,
+  evv_clock_out_at        timestamptz,
+  evv_clock_out_lat       double precision,
+  evv_clock_out_lng       double precision,
+  evv_clock_out_accuracy  double precision,
   evv_method      text,
   evv_verified    boolean NOT NULL DEFAULT false,
   evv_exception   text,

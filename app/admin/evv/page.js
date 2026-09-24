@@ -130,8 +130,18 @@ export default async function EvvPage() {
               <div className="text-[12px] text-[var(--muted)]">
                 {day?.label} {v.start}
               </div>
-              <div>{v.evv?.clockIn || '—'}</div>
-              <div>{v.evv?.clockOut || '—'}</div>
+              <div className="flex items-center gap-1">
+                {v.evv?.clockIn || '—'}
+                {typeof v.evv?.clockInLat === 'number' && (
+                  <span title="Location captured on clock-in" className="text-[10px] text-[var(--success)]">●</span>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                {v.evv?.clockOut || '—'}
+                {typeof v.evv?.clockOutLat === 'number' && (
+                  <span title="Location captured on clock-out" className="text-[10px] text-[var(--success)]">●</span>
+                )}
+              </div>
               <div className="text-[12px]">{v.evv?.method || '—'}</div>
               <div>
                 <span className={'inline-flex items-center gap-1.5 text-[11px] font-display font-bold px-2.5 py-1 rounded-full ' + info.className}>

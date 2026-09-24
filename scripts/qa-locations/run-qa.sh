@@ -35,7 +35,7 @@ echo "==> schema loaded into $DB_NAME"
 # 2. Copy the query layer and rewrite the '@/lib/db' alias, which plain
 #    node can't resolve (Next's tsconfig paths only apply inside Next).
 cp "$REPO/lib/queries.js" "$REPO/lib/db.js" "$REPO/lib/data.js" "$REPO/lib/state-compliance.js" "$REPO/lib/evv-mapping.js" "$REPO/lib/permissions.js" "$WORK/"
-sed -i.bak   -e "s|from '@/lib/db'|from './db.js'|"   -e "s|from '@/lib/data'|from './data.js'|"   -e "s|from '@/lib/state-compliance'|from './state-compliance.js'|"   "$WORK/queries.js" "$WORK/evv-mapping.js" && rm -f "$WORK"/*.bak
+sed -i.bak   -e "s|from '@/lib/db'|from './db.js'|"   -e "s|from '@/lib/data'|from './data.js'|"   -e "s|from '@/lib/state-compliance'|from './state-compliance.js'|"   -e "s|from '@/lib/evv-mapping'|from './evv-mapping.js'|"   "$WORK/queries.js" "$WORK/evv-mapping.js" && rm -f "$WORK"/*.bak
 cp "$QA_DIR/qa.mjs" "$QA_DIR/qa-regression.mjs" "$QA_DIR/qa-roles.mjs" "$QA_DIR/qa-scoping.mjs" "$QA_DIR/qa-referral-create.mjs" "$QA_DIR/qa-multi-state.mjs" "$QA_DIR/qa-platform-dashboard.mjs" "$QA_DIR/qa-admin-dashboard.mjs" "$QA_DIR/qa-audit-log.mjs" "$WORK/"
 printf '{\n  "type": "module"\n}\n' > "$WORK/package.json"
 
