@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/actions/auth';
 import { hashPassword } from '@/lib/auth';
+import { passwordProblem } from '@/lib/passwords';
 import { queryOne } from '@/lib/db';
 import * as db from '@/lib/queries';
 
@@ -94,8 +95,9 @@ export async function addCaregiverAction(prevState, formData) {
   if (!name || !email || !password) {
     return { error: 'Name, email and a starting password are all required.' };
   }
-  if (password.length < 8) {
-    return { error: 'Use a starting password of at least 8 characters.' };
+  const passwordIssue = passwordProblem(password, { email, name });
+  if (passwordIssue) {
+    return { error: `Starting password: ${passwordIssue}` };
   }
 
   const existing = await queryOne('SELECT id FROM users WHERE email = $1', [email]);

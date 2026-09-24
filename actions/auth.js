@@ -1,77 +1,68 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { queryOne } from '@/lib/db';
-import { getPlatformAdminByEmail } from '@/lib/queries';
-import { verifyPassword, setSessionCookie, clearSessionCookie, getSession } from '@/lib/auth';
-import { PERMISSIONS, ROLE_HOME } from '@/lib/permissions';
+import { authenticateLogin } from '@/lib/queries';
+import { setSessionCookie, clearSessionCookie, getSession } from '@/lib/auth';
+import { PERMISSIONS, ROLE_HOME, CHANGE_PASSWORD_PATH } from '@/lib/permissions';
 
+// Only same-site relative paths. `//evil.example` and `/\\evil.example`
+// both start with "/" but browsers treat them as another host — an open
+// redirect that could send someone from a real Hearth login page to a
+// look-alike site. (Fixed 2026-09-23; the old check was startsWith('/').)
+function safeNext(next) {
+  const n = String(next || '');
+  if (!n.startsWith('/') || n.startsWith('//') || n.startsWith('/\\')) return '';
+  return n;
+}
+
+// Sign-in for every role (tenant staff, caregivers and platform admins —
+// see db/schema.sql's platform_admins comment for why it's one form). The
+// checks themselves (lockout, generic error, deactivated/suspended) live in
+// lib/queries.js authenticateLogin so QA can exercise them directly.
 export async function loginAction(prevState, formData) {
-  const email = String(formData.get('email') || '').trim().toLowerCase();
+  const email = String(formData.get('email') || '');
   const password = String(formData.get('password') || '');
-  const next = String(formData.get('next') || '');
+  const next = safeNext(formData.get('next'));
 
-  if (!email || !password) {
-    return { error: 'Enter both an email and a password.' };
-  }
+  const result = await authenticateLogin(email, password);
+  if (!result.ok) return { error: result.error };
 
-  // Same login form for every role, platform admins included — there is
-  // no separate "platform sign-in" page, since that account isn't a row
-  // in `users` at all (see db/schema.sql's platform_admins comment and
-  // lib/queries.js's Platform admin section). Check the tenant-scoped
-  // users table first since that's the overwhelming majority of logins,
-  // then fall back to platform_admins.
-  const user = await queryOne('SELECT * FROM users WHERE email = $1', [email]);
-  if (user) {
-    const valid = await verifyPassword(password, user.password_hash);
-    if (!valid) {
-      return { error: 'Incorrect password.' };
-    }
+  if (result.kind === 'platform') {
+    const admin = result.admin;
     await setSessionCookie({
-      userId: user.id,
-      organizationId: user.organization_id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      caregiverId: user.caregiver_id,
-      // Location scope for franchise/multi-location agencies — null means
-      // agency-wide (every current ADMIN/COORDINATOR, since there's no UI
-      // yet to scope those roles to a location; see db/schema.sql's
-      // comment on users.location_id). lib/queries.js's getters treat a
-      // null locationId as "no filter", so this is a no-op for every
-      // existing account until locations are actually assigned.
-      locationId: user.location_id,
-    });
-    redirect(next && next.startsWith('/') ? next : ROLE_HOME[user.role] || '/');
-  }
-
-  const platformAdmin = await getPlatformAdminByEmail(email);
-  if (platformAdmin) {
-    const valid = await verifyPassword(password, platformAdmin.passwordHash);
-    if (!valid) {
-      return { error: 'Incorrect password.' };
-    }
-    if (!platformAdmin.active) {
-      return { error: 'This platform admin account has been deactivated.' };
-    }
-    await setSessionCookie({
-      userId: platformAdmin.id,
+      userId: admin.id,
       organizationId: null,
-      email: platformAdmin.email,
-      name: platformAdmin.name,
+      email: admin.email,
+      name: admin.name,
       role: 'PLATFORM_ADMIN',
       // Sub-role WITHIN the platform-admin role — 'support' or 'full', see
-      // db/schema.sql's comment on platform_admins.platform_role. Every
-      // requireSession(['PLATFORM_ADMIN']) check is unaffected by this
-      // (both sub-roles still pass); actions/platform.js's write actions
-      // are what actually read session.platformRole.
-      platformRole: platformAdmin.platformRole,
+      // db/schema.sql's comment on platform_admins.platform_role.
+      platformRole: admin.platformRole,
       caregiverId: null,
     });
-    redirect(next && next.startsWith('/') ? next : ROLE_HOME.PLATFORM_ADMIN);
+    redirect(next || ROLE_HOME.PLATFORM_ADMIN);
   }
 
-  return { error: 'No account found with that email.' };
+  const user = result.user;
+  await setSessionCookie({
+    userId: user.id,
+    organizationId: user.organizationId,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    caregiverId: user.caregiverId,
+    // Location scope — null means agency-wide. Re-read from the database
+    // on every request by getSession, like role.
+    locationId: user.locationId,
+    // Session version: getSession refuses the token once the account's
+    // session_version moves on (deactivation, access change, password reset).
+    sv: user.sessionVersion,
+    // Read by proxy.js to route a first-time / just-reset account to the
+    // change-password page before anything else.
+    mustChangePassword: user.mustChangePassword,
+  });
+  if (user.mustChangePassword) redirect(CHANGE_PASSWORD_PATH);
+  redirect(next || ROLE_HOME[user.role] || '/');
 }
 
 export async function logoutAction() {
@@ -84,6 +75,10 @@ export async function requireSession(allowedRoles) {
   if (!session || (allowedRoles && !allowedRoles.includes(session.role))) {
     redirect('/login');
   }
+  // An account still on a starting/reset password can do nothing else
+  // until it sets its own. proxy.js enforces this for page loads; this
+  // covers Server Actions, which are public endpoints in their own right.
+  if (session.mustChangePassword) redirect(CHANGE_PASSWORD_PATH);
   return session;
 }
 

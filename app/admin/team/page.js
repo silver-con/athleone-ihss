@@ -3,6 +3,14 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getOrgStaff, getLocations } from '@/lib/queries';
 import CreateTeamMemberForm from '@/components/admin/CreateTeamMemberForm';
+import TeamMemberControls from '@/components/admin/TeamMemberControls';
+
+function formatWhen(value) {
+  if (!value) return null;
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric',
+  }).format(new Date(value));
+}
 
 const ROLE_LABEL = {
   ADMIN: 'Organization admin',
@@ -60,7 +68,7 @@ export default async function AdminTeamPage() {
           <div>Name</div>
           <div>Email</div>
           <div>Role</div>
-          <div>Location</div>
+          <div>Location / status</div>
         </div>
 
         {staff.length === 0 && (
@@ -72,15 +80,21 @@ export default async function AdminTeamPage() {
         {staff.map((member) => (
           <div
             key={member.id}
-            className="grid grid-cols-[1.5fr_1.6fr_1.3fr_1.2fr] px-5 py-3.5 text-[13px] items-center border-b border-[oklch(93%_0.01_85)] last:border-none"
+            className={
+              'grid grid-cols-[1.5fr_1.6fr_1.3fr_1.2fr] px-5 py-3.5 text-[13px] items-start border-b border-[oklch(93%_0.01_85)] last:border-none ' +
+              (member.active ? '' : 'opacity-70')
+            }
           >
-            <div className="font-display font-bold text-[14px]">
-              {member.name}
-              {member.id === session.userId && (
-                <span className="ml-2 text-[11px] font-body font-normal text-[var(--muted)]">
-                  (you)
-                </span>
-              )}
+            <div>
+              <div className="font-display font-bold text-[14px]">
+                {member.name}
+                {member.id === session.userId && (
+                  <span className="ml-2 text-[11px] font-body font-normal text-[var(--muted)]">
+                    (you)
+                  </span>
+                )}
+              </div>
+              {member.id !== session.userId && <TeamMemberControls member={member} locations={locations} />}
             </div>
             <div className="text-[12.5px] text-[var(--muted)] break-all">{member.email}</div>
             <div>
@@ -95,6 +109,21 @@ export default async function AdminTeamPage() {
               {member.locationName || (
                 <span className="text-[var(--muted)]">Organization-wide</span>
               )}
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {!member.active && (
+                  <span className="text-[10.5px] font-display font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[oklch(93%_0.06_25)] text-[var(--danger)]">
+                    Deactivated {formatWhen(member.deactivatedAt) || ''}
+                  </span>
+                )}
+                {member.active && member.mustChangePassword && (
+                  <span className="text-[10.5px] font-display font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[oklch(94%_0.05_85)] text-[oklch(45%_0.1_75)]">
+                    Password not yet set
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-[var(--muted)] mt-1">
+                {member.lastLoginAt ? `Last sign-in ${formatWhen(member.lastLoginAt)}` : 'Never signed in'}
+              </div>
             </div>
           </div>
         ))}

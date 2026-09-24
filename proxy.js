@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/session';
-import { ROUTE_PERMISSIONS, PERMISSIONS, ROLE_HOME } from '@/lib/permissions';
+import { ROUTE_PERMISSIONS, PERMISSIONS, ROLE_HOME, CHANGE_PASSWORD_PATH } from '@/lib/permissions';
 
 // Which top-level sections require a session at all. Anything not matched
 // here (the landing page, /login, /signup, static assets) is public. This
 // list is intentionally still just the coarse prefixes — it only answers
 // "does this need a login," not "which role" — that question is answered
 // per-route below, by lib/permissions.js's ROUTE_PERMISSIONS table.
-const PROTECTED_PREFIXES = ['/referrals', '/clients', '/fax', '/admin', '/caregiver', '/platform'];
+const PROTECTED_PREFIXES = ['/referrals', '/clients', '/fax', '/admin', '/caregiver', '/platform', '/account'];
 
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
@@ -32,6 +32,13 @@ export async function proxy(request) {
   // that couldn't tell two pages under the same prefix apart. Every
   // protected prefix ends with a catch-all entry, so this should always
   // find a match; the null-check below is a fail-safe, not an expected path.
+  // Starting or just-reset password: nothing else until it's replaced.
+  // (This reads the token claim set at sign-in. The authoritative check is
+  // lib/auth.js getSession, which re-reads the flag from the database.)
+  if (session.mustChangePassword && pathname !== CHANGE_PASSWORD_PATH) {
+    return NextResponse.redirect(new URL(CHANGE_PASSWORD_PATH, request.url));
+  }
+
   const match = ROUTE_PERMISSIONS.find((r) => r.test(pathname));
   const allowed = match ? (PERMISSIONS[match.key]?.roles || []).includes(session.role) : false;
 
@@ -57,5 +64,6 @@ export const config = {
     '/admin/:path*',
     '/caregiver/:path*',
     '/platform/:path*',
+    '/account/:path*',
   ],
 };

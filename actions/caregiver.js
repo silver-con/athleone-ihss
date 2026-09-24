@@ -35,6 +35,14 @@ export async function clockInAction(visitId, geo = null) {
   const session = await requirePermission('caregiver.visit.clock');
   const visit = await db.getVisit(session.organizationId, visitId);
   if (!visit || visit.caregiverId !== session.caregiverId) return;
+  // Only an ACTIVE caregiver may start a visit. On-leave, onboarding and
+  // applicant caregivers can still sign in (messages, onboarding tasks),
+  // but must not create EVV records. Clock-OUT is deliberately not gated:
+  // a caregiver put on leave mid-visit still needs to close that visit.
+  const caregiver = await db.getCaregiver(session.organizationId, session.caregiverId);
+  if (!caregiver || caregiver.status !== 'active') {
+    return { error: 'Your caregiver status is not active, so you can\'t start a visit. Contact your agency office.' };
+  }
   await db.clockIn(session.organizationId, visitId, null, sanitizeGeo(geo));
   revalidatePath('/caregiver/schedule');
   revalidatePath(`/caregiver/visit/${visitId}`);

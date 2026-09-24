@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { clockInAction, clockOutAction } from '@/actions/caregiver';
 
 // Best-effort device geolocation, captured immediately before a clock
@@ -32,19 +32,29 @@ function captureGeo() {
 
 export function ClockInButton({ visitId, className, children }) {
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState(null);
   return (
-    <button
-      onClick={() => {
-        startTransition(async () => {
-          const geo = await captureGeo();
-          await clockInAction(visitId, geo);
-        });
-      }}
-      disabled={pending}
-      className={className}
-    >
-      {pending ? 'Clocking in…' : children || 'Clock In'}
-    </button>
+    <>
+      <button
+        onClick={() => {
+          setError(null);
+          startTransition(async () => {
+            const geo = await captureGeo();
+            const result = await clockInAction(visitId, geo);
+            if (result?.error) setError(result.error);
+          });
+        }}
+        disabled={pending}
+        className={className}
+      >
+        {pending ? 'Clocking in…' : children || 'Clock In'}
+      </button>
+      {error && (
+        <p role="alert" className="text-[12.5px] font-display font-bold text-[var(--danger)] mt-2">
+          {error}
+        </p>
+      )}
+    </>
   );
 }
 

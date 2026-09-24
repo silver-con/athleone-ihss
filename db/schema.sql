@@ -304,7 +304,36 @@ CREATE TABLE IF NOT EXISTS users (
   --   ALTER TABLE users ADD CONSTRAINT users_role_check
   --     CHECK (role IN ('COORDINATOR', 'ADMIN', 'LOCATION_ADMIN', 'CAREGIVER'));
   location_id     text REFERENCES locations(id) ON DELETE SET NULL,
-  created_at      timestamptz NOT NULL DEFAULT now()
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  -- Account lifecycle, added 2026-09-23 (access-control pass):
+  --   active: false = deactivated. Sign-in is refused and any existing
+  --     session stops working on its next request (lib/auth.js getSession
+  --     re-checks this row every time). Texas expects access removed
+  --     within 24 hours of termination; this makes it immediate.
+  --   session_version: copied into the session token at sign-in. Bumping
+  --     it (deactivate, role/location change, password reset or change)
+  --     invalidates every existing session for this account at once.
+  --   must_change_password: DEFAULT true so every newly created account
+  --     (team member, caregiver, a new agency's first admin) must replace
+  --     the starting password someone else typed for them. The migration
+  --     adds it as false for pre-existing accounts, then flips the default.
+  active               boolean NOT NULL DEFAULT true,
+  session_version      integer NOT NULL DEFAULT 1,
+  must_change_password boolean NOT NULL DEFAULT true,
+  password_changed_at  timestamptz,
+  last_login_at        timestamptz,
+  deactivated_at       timestamptz
+);
+
+-- Failed sign-in tracking, keyed by the email typed (not by account), so
+-- lockout works the same whether or not the email exists — which is what
+-- keeps the lockout itself from revealing which emails have accounts.
+-- Covers both users and platform_admins sign-ins. See lib/login.js.
+CREATE TABLE IF NOT EXISTS login_attempts (
+  email          text PRIMARY KEY,
+  failed_count   integer NOT NULL DEFAULT 0,
+  locked_until   timestamptz,
+  last_failed_at timestamptz
 );
 
 -- PLATFORM ADMIN — Hearth's own ops staff, not any tenant's staff.

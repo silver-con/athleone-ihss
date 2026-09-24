@@ -55,7 +55,7 @@ export default function CreateOrganizationForm() {
         </label>
         <label className={labelClass}>
           Starting password
-          <input name="password" type="text" required minLength={8} className={field} />
+          <input name="password" type="text" required minLength={10} className={field} />
         </label>
         <label className={labelClass}>
           State

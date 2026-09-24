@@ -14,6 +14,7 @@ import {
 } from '@/lib/queries';
 import { recordCheckAction, updateDocumentAction } from '@/actions/caregiver-hr';
 import ActivateCaregiverButton from '@/components/admin/ActivateCaregiverButton';
+import CaregiverPasswordReset from '@/components/admin/CaregiverPasswordReset';
 
 const DOC_STATUS_LABEL = {
   not_started: 'Not started',
@@ -119,9 +120,12 @@ export default async function CaregiverRecordPage({ params }) {
             {caseload.length === 1 ? '' : 's'} assigned
           </p>
         </div>
-        <span className="text-[11px] font-display font-bold uppercase tracking-wide px-2.5 py-1 rounded-full bg-[var(--accent-soft)] text-[var(--accent)] shrink-0">
-          {caregiver.status}
-        </span>
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <span className="text-[11px] font-display font-bold uppercase tracking-wide px-2.5 py-1 rounded-full bg-[var(--accent-soft)] text-[var(--accent)]">
+            {caregiver.status}
+          </span>
+          <CaregiverPasswordReset caregiverId={caregiver.id} />
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3 mt-5 text-[12.5px]">

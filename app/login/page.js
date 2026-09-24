@@ -21,7 +21,7 @@ export default async function LoginPage({ searchParams }) {
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-7">
           <h1 className="font-display font-extrabold text-[19px] mb-1">Sign in</h1>
           <p className="text-[13px] text-[var(--muted)] mb-6">
-            Use one of the demo accounts from the README, or your own if you&rsquo;ve reseeded.
+            Sign in with the account your agency set up for you.
           </p>
           <LoginForm next={next} />
         </div>

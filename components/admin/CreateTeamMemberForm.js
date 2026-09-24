@@ -27,7 +27,7 @@ export default function CreateTeamMemberForm({ locations = [] }) {
 
       <p className="text-[12.5px] text-[var(--muted)] mt-2 max-w-[600px]">
         Creates an office account and the login they use. Give them the starting password
-        directly — they can change it after signing in. Caregivers are added from the
+        privately — they&rsquo;ll be required to replace it with their own the first time they sign in. Caregivers are added from the
         Caregivers page instead, so their HR record and credentialing travel with them.
       </p>
 
@@ -53,7 +53,7 @@ export default function CreateTeamMemberForm({ locations = [] }) {
         </label>
         <label className={labelClass}>
           Starting password
-          <input name="password" type="text" required minLength={8} className={field} />
+          <input name="password" type="text" required minLength={10} className={field} />
         </label>
         <label className={labelClass}>
           Role

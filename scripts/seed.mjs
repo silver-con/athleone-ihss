@@ -299,7 +299,9 @@ async function main() {
     for (const u of users) {
       const passwordHash = await bcrypt.hash(u.password, 10);
       await client.query(
-        `INSERT INTO users (id, organization_id, email, password_hash, name, role, caregiver_id) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        // must_change_password = false: demo accounts sign straight in with
+        // the README passwords. Real accounts default to true (db/schema.sql).
+        `INSERT INTO users (id, organization_id, email, password_hash, name, role, caregiver_id, must_change_password) VALUES ($1,$2,$3,$4,$5,$6,$7,false)`,
         [randomUUID(), u.orgId, u.email, passwordHash, u.name, u.role, u.caregiverId]
       );
     }

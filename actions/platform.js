@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/actions/auth';
 import { hashPassword } from '@/lib/auth';
+import { passwordProblem } from '@/lib/passwords';
 import {
   createOrganizationWithAdmin,
   logPlatformAdminAccess,
@@ -55,8 +56,9 @@ export async function createOrganizationAction(prevState, formData) {
   if (!organizationName || !adminName || !email || !password) {
     return { error: 'Agency name, admin name, email, and a starting password are all required.', success: null };
   }
-  if (password.length < 8) {
-    return { error: 'Password must be at least 8 characters.', success: null };
+  const adminPasswordIssue = passwordProblem(password, { email, name: adminName });
+  if (adminPasswordIssue) {
+    return { error: `Starting password: ${adminPasswordIssue}`, success: null };
   }
 
   let result;
@@ -135,8 +137,9 @@ export async function createPlatformAdminAction(prevState, formData) {
   if (!name || !email || !password) {
     return { error: 'Name, email, and a starting password are all required.', success: null };
   }
-  if (password.length < 8) {
-    return { error: 'Password must be at least 8 characters.', success: null };
+  const platformPasswordIssue = passwordProblem(password, { email, name });
+  if (platformPasswordIssue) {
+    return { error: `Starting password: ${platformPasswordIssue}`, success: null };
   }
   if (!PLATFORM_ROLES.includes(platformRole)) {
     return { error: 'Choose a role: Support or Full admin.', success: null };
