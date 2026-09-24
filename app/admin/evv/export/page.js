@@ -9,9 +9,11 @@ import {
   getEvvCredentials,
   getOrganization,
   getMaintenanceWindowDays,
+  getOverlapConflicts,
+  describeOverlapConflicts,
 } from '@/lib/queries';
 import { buildVisitPayload, validateVisitPayload } from '@/lib/evv-mapping';
-import { exportState, EXPORT_STATES, EXPORT_STATE_ORDER } from '@/lib/evv-export';
+import { exportState, isLocalRefusal, EXPORT_STATES, EXPORT_STATE_ORDER } from '@/lib/evv-export';
 import { resolveWeekStart, addDays, todayIso, shortDayLabel } from '@/lib/calendar';
 import StatTile from '@/components/StatTile';
 import WeekNav from '@/components/WeekNav';
@@ -62,10 +64,14 @@ export default async function EvvExportPage({ searchParams }) {
     getEvvCredentials(session.organizationId),
   ]);
 
+  const recheck = (r) => !r.latestSync || r.latestSync.status === 'pending' || isLocalRefusal(r.latestSync);
+  const toCheck = rows.filter(recheck).map((r) => r.visit.id);
+  const conflicts = await getOverlapConflicts(session.organizationId, toCheck);
+
   const agencyProblems = new Set();
   const computed = rows.map((r) => {
     let problems = [];
-    const needsCheck = !r.latestSync || ['pending'].includes(r.latestSync.status);
+    const needsCheck = recheck(r);
     if (needsCheck) {
       const payload = buildVisitPayload({
         credentials: credentials || {},
@@ -77,7 +83,7 @@ export default async function EvvExportPage({ searchParams }) {
       });
       const all = validateVisitPayload(payload);
       all.filter((p) => AGENCY_PROBLEM.test(p)).forEach((p) => agencyProblems.add(p));
-      problems = all.filter((p) => !AGENCY_PROBLEM.test(p));
+      problems = [...all.filter((p) => !AGENCY_PROBLEM.test(p)), ...describeOverlapConflicts(conflicts[r.visit.id])];
     }
     const state = exportState({ visit: r.visit, latestSync: r.latestSync, problems });
     const meta = EXPORT_STATES[state.key];

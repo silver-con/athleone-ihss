@@ -14,6 +14,7 @@ export async function updateEvvSettingsAction(prevState, formData) {
     graceMinutes: String(formData.get('graceMinutes') ?? '').trim(),
     maintenanceWindowDays: String(formData.get('maintenanceWindowDays') ?? '').trim(),
     homeRadiusFeet: String(formData.get('homeRadiusFeet') ?? '').trim(),
+    overlapDistanceFeet: String(formData.get('overlapDistanceFeet') ?? '').trim(),
   };
   try {
     await db.updateOrganizationEvvSettings(session.organizationId, next);
@@ -27,6 +28,7 @@ export async function updateEvvSettingsAction(prevState, formData) {
   if (before.visitMaintenanceWindowDays !== after.visitMaintenanceWindowDays) {
     changes.push(`maintenance deadline ${before.visitMaintenanceWindowDays ?? 'state'} -> ${after.visitMaintenanceWindowDays ?? 'state'} days`);
   }
+  if (before.overlapDistanceFeet !== after.overlapDistanceFeet) changes.push(`overlap distance ${before.overlapDistanceFeet} -> ${after.overlapDistanceFeet} ft`);
   if (before.homeRadiusFeet !== after.homeRadiusFeet) changes.push(`home radius ${before.homeRadiusFeet} -> ${after.homeRadiusFeet} ft`);
   if (changes.length === 0) return { error: null, success: 'No changes.' };
   await db.logAuditEvent(session.organizationId, {

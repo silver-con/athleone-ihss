@@ -44,6 +44,11 @@ async function run() {
   eq('sent, awaiting the state', exportState({ visit: v(), latestSync: { status: 'sent' } }).key, 'sent');
   const rej = exportState({ visit: v(), latestSync: { status: 'failed', lastError: 'Invalid Medicaid ID' } });
   eq('rejected, with the state\'s reason', [rej.key, rej.detail], ['rejected', 'Invalid Medicaid ID']);
+  const localFailed = { status: 'failed', lastError: 'Cannot transmit: client has no Medicaid ID on file.' };
+  eq('refused locally by the sender and still broken is "blocked" (not "rejected by the state"), with the live reason',
+    [exportState({ visit: v(), latestSync: localFailed, problems: ['client has no Medicaid ID on file'] }).key], ['blocked']);
+  const fixed = exportState({ visit: v(), latestSync: localFailed, problems: [] });
+  eq('  ...and once fixed it is ready to queue again', [fixed.key, fixed.detail], ['not_queued', 'Fixed since the last attempt — queue it again.']);
   eq('missing data blocks a queued visit', exportState({ visit: v(), latestSync: { status: 'pending', attempts: 0 }, problems: ['no Medicaid ID'] }).key, 'blocked');
   eq('a clean queued visit is queued', exportState({ visit: v(), latestSync: { status: 'pending', attempts: 0 } }).key, 'queued');
   check('  ...and shows retries', /attempt 3/.test(exportState({ visit: v(), latestSync: { status: 'pending', attempts: 2 } }).detail || ''));

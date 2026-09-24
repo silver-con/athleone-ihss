@@ -95,6 +95,12 @@ CREATE TABLE IF NOT EXISTS organizations (
   -- How close (in feet) a GPS clock event must be to the client's home to
   -- count as "at home" — Vesta uses 250 ft. Added 2026-09-24.
   home_radius_feet              integer NOT NULL DEFAULT 250 CHECK (home_radius_feet >= 50 AND home_radius_feet <= 2000),
+  -- Overlapping-visit check: two visits by the same caregiver at
+  -- overlapping times whose GPS fixes are farther apart than this are
+  -- held back from export unless reason code 110 D (allowable overlapping
+  -- visits) is recorded — Vesta's failed-to-export rule uses 100 ft.
+  -- Added 2026-09-24.
+  overlap_distance_feet         integer NOT NULL DEFAULT 100 CHECK (overlap_distance_feet >= 25 AND overlap_distance_feet <= 1000),
   created_at                    timestamptz NOT NULL DEFAULT now()
 );
 

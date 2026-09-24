@@ -80,6 +80,28 @@ export default function EvvSettingsForm({ organization, stateDays, stateName }) 
         </label>
       </section>
 
+      <section className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6">
+        <div className="font-display font-extrabold text-[15px]">Overlapping visits</div>
+        <p className="text-[12.5px] text-[var(--muted)] mt-1 max-w-[640px]">
+          When one caregiver&rsquo;s visits overlap in time and their GPS locations are farther apart than this, the
+          visits are held back from export until someone corrects them or records reason code 110 D (allowable
+          overlapping visits). Two clients in the same home are never flagged. Vesta uses 100 feet.
+        </p>
+        <label className="flex flex-col gap-1.5 mt-4 text-[12.5px] font-display font-bold max-w-[260px]">
+          Feet
+          <input
+            name="overlapDistanceFeet"
+            type="number"
+            min={25}
+            max={1000}
+            step={1}
+            required
+            defaultValue={organization.overlapDistanceFeet ?? 100}
+            className={field}
+          />
+        </label>
+      </section>
+
       <div className="flex items-center gap-3">
         <button
           type="submit"
