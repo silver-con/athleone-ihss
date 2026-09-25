@@ -10,6 +10,8 @@
     "predev": "node --env-file=.env scripts/check-schema.mjs",
     "db:setup": "node --env-file=.env scripts/db-setup.mjs",
     "db:check": "node --env-file=.env scripts/check-schema.mjs",
+    "db:migrate": "node --env-file=.env scripts/migrate.mjs",
+    "db:migrate:status": "node --env-file=.env scripts/migrate.mjs --status",
     "db:migrate-2026-09-17": "node --env-file=.env scripts/migrate-2026-09-17.mjs",
     "db:migrate-2026-09-21-multi-state": "node --env-file=.env scripts/migrate-2026-09-21-multi-state.mjs",
     "db:migrate-2026-09-22-audit-log": "node --env-file=.env scripts/migrate-2026-09-22-audit-log.mjs",
