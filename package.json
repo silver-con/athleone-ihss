@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "next build",
-    "start": "next start",
+    "build": "next build && node scripts/copy-standalone-assets.mjs",
+    "start": "node --env-file=.env .next/standalone/server.js",
     "lint": "eslint",
     "predev": "node --env-file=.env scripts/check-schema.mjs",
     "db:setup": "node --env-file=.env scripts/db-setup.mjs",
@@ -34,7 +34,7 @@
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.12",
     "next": "16.3.5",
-    "nodemailer": "^7.0.13",
+    "nodemailer": "^10.0.10",
     "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"

@@ -1,0 +1,59 @@
+# Hearth on one server (a DigitalOcean Droplet): the app, Postgres, and
+# Caddy in front for automatic HTTPS. Step-by-step: deploy/DEPLOY-DIGITALOCEAN.md
+#
+#   cp .env.production.example .env.production   # then fill it in
+#   docker compose --env-file .env.production up -d --build
+#
+# (--env-file makes DOMAIN and POSTGRES_PASSWORD from that same file
+# available below; env_file passes the whole file to the app.)
+#
+# Data lives in the named volumes below and survives rebuilds/restarts.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hearth
+      POSTGRES_USER: hearth
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hearth -d hearth"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # Not published to the internet — only the app can reach it.
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql://hearth:${POSTGRES_PASSWORD}@db:5432/hearth
+      RUN_MIGRATIONS: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env.production}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

@@ -40,6 +40,16 @@ const CAREGIVER_EMAILS = {
   cg4: 'priya@hearth.demo',
 };
 
+// Seeding DELETES the demo agencies' data (and every user login). On a
+// production server that would be a disaster, so it needs an explicit
+// flag there: node scripts/seed.mjs --yes-reset-demo-data
+// (Fine for a demo server whose only data IS the demo.)
+if (process.env.NODE_ENV === 'production' && !process.argv.includes('--yes-reset-demo-data')) {
+  console.error('Refusing to seed: NODE_ENV=production and seeding wipes users and demo data.');
+  console.error('If this server is ONLY a demo, re-run with: node scripts/seed.mjs --yes-reset-demo-data');
+  process.exit(1);
+}
+
 async function main() {
   const client = await pool.connect();
   try {
@@ -58,7 +68,8 @@ async function main() {
     await client.query(
       `TRUNCATE users, messages, billing_lines, service_authorizations, caregiver_orientations,
                 training_completions, training_courses, caregiver_checks, caregiver_documents,
-                visits, clients, referrals, caregivers RESTART IDENTITY CASCADE`
+                visits, clients, referrals, caregivers,
+                notifications, password_reset_tokens, sign_in_challenges RESTART IDENTITY CASCADE`
     );
 
     console.log('Seeding organizations…');

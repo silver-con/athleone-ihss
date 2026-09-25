@@ -1,0 +1,70 @@
+# DigitalOcean App Platform spec — the "managed" alternative to a Droplet
+# (see deploy/DEPLOY-DIGITALOCEAN.md, Option B). Create with:
+#   doctl apps create --spec .do/app.yaml
+# or App Platform -> Create App -> from GitHub, then paste this in the
+# app's "App Spec" editor. Replace the github repo below with yours.
+#
+# Secrets (SESSION_SECRET etc.) are marked type: SECRET — set their real
+# values in the App Platform UI after creating the app; they're encrypted
+# there and never stored in this file.
+name: hearth
+region: nyc
+services:
+  - name: web
+    github:
+      repo: YOUR-GITHUB-USER/hearth-intake-app
+      branch: main
+      deploy_on_push: true
+    dockerfile_path: Dockerfile
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+    health_check:
+      http_path: /api/health
+      initial_delay_seconds: 20
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: DATABASE_CA_CERT
+        scope: RUN_TIME
+        value: ${db.CA_CERT}
+      - key: APP_BASE_URL
+        scope: RUN_TIME
+        value: ${APP_URL}
+      - key: SESSION_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: set-me-in-the-app-platform-ui
+      - key: EVV_CREDENTIALS_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: set-me-in-the-app-platform-ui
+      - key: EMAIL_PROVIDER
+        scope: RUN_TIME
+        value: log
+      - key: SMS_PROVIDER
+        scope: RUN_TIME
+        value: log
+jobs:
+  # Runs before every deploy goes live: brings the database up to date.
+  - name: migrate
+    kind: PRE_DEPLOY
+    github:
+      repo: YOUR-GITHUB-USER/hearth-intake-app
+      branch: main
+    dockerfile_path: Dockerfile
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    run_command: node scripts/migrate.mjs
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: DATABASE_CA_CERT
+        scope: RUN_TIME
+        value: ${db.CA_CERT}
+databases:
+  - name: db
+    engine: PG
+    version: "16"
+    production: false

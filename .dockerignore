@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.env
+.env.*
+
+!.env.production.example
+private_key
+*.pem
+mobile/android
+mobile/node_modules
+docs/security-assessments
+npm-debug.log*
+.DS_Store

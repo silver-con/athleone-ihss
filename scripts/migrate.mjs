@@ -126,7 +126,7 @@ async function main() {
       const id = `legacy/${file}`;
       if (applied.has(id)) continue;
       console.log(`==> Running ${id}`);
-      const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', file)], {
+      const r = spawnSync(process.execPath, [...process.execArgv, path.join(ROOT, 'scripts', file)], {
         cwd: ROOT,
         env: process.env,
         stdio: 'inherit',
@@ -166,7 +166,7 @@ async function main() {
   await client.end();
 
   console.log('==> Checking the live database against db/schema.sql');
-  const check = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'check-schema.mjs')], {
+  const check = spawnSync(process.execPath, [...process.execArgv, path.join(ROOT, 'scripts', 'check-schema.mjs')], {
     cwd: ROOT,
     env: process.env,
     stdio: 'inherit',

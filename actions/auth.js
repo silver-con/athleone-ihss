@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 import { authenticateLogin, loadSignInAccount, getSignInChallenge, consumeSignInChallenge } from '@/lib/queries';
 import { setSessionCookie, clearSessionCookie, getSession } from '@/lib/auth';
 import { PERMISSIONS, ROLE_HOME, CHANGE_PASSWORD_PATH } from '@/lib/permissions';
-import { createChallengeToken, verifyChallengeToken, CHALLENGE_COOKIE_NAME, CHALLENGE_MAX_AGE_SECONDS } from '@/lib/session';
+import { createChallengeToken, verifyChallengeToken, CHALLENGE_COOKIE_NAME, CHALLENGE_MAX_AGE_SECONDS, cookieSecure } from '@/lib/session';
 import { twoFactorPlan, startSignInChallenge, verifySignInChallenge } from '@/lib/sign-in';
 
 // Only same-site relative paths. `//evil.example` and `/\\evil.example`
@@ -96,7 +96,7 @@ async function setChallengeCookie(challengeId) {
   const store = await cookies();
   store.set(CHALLENGE_COOKIE_NAME, await createChallengeToken(challengeId), {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: cookieSecure(),
     sameSite: 'lax',
     path: '/',
     maxAge: CHALLENGE_MAX_AGE_SECONDS,
