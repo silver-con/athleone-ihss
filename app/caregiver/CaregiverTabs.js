@@ -19,6 +19,7 @@ const TABS = [
   {
     href: '/caregiver/messages',
     label: 'Messages',
+    badgeKey: 'unreadMessages',
     match: (p) => p.startsWith('/caregiver/messages'),
     icon: (active) => (
       <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.3 : 2} strokeLinecap="round" strokeLinejoin="round">
@@ -53,7 +54,7 @@ const TABS = [
   },
 ];
 
-export default function CaregiverTabs() {
+export default function CaregiverTabs({ badges = {} }) {
   const pathname = usePathname();
 
   return (
@@ -69,7 +70,14 @@ export default function CaregiverTabs() {
               (active ? 'text-[var(--accent)]' : 'text-[var(--muted)]')
             }
           >
-            {tab.icon(active)}
+            <span className="relative">
+              {tab.icon(active)}
+              {tab.badgeKey && badges[tab.badgeKey] > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 min-w-[17px] h-[17px] px-1 rounded-full bg-[var(--danger)] text-white text-[10px] font-extrabold flex items-center justify-center">
+                  {badges[tab.badgeKey]}
+                </span>
+              )}
+            </span>
             {tab.label}
           </Link>
         );

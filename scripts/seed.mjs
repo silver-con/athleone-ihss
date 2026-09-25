@@ -132,8 +132,11 @@ async function main() {
     console.log('Seeding messages…');
     for (const m of initialMessages) {
       await client.query(
-        `INSERT INTO messages (id, organization_id, caregiver_id, sender, body, time, mine) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [m.id, ORG_PRIMARY, m.caregiverId, m.sender, m.text, m.time, m.mine]
+        `INSERT INTO messages (id, organization_id, caregiver_id, sender, body, time, mine, created_at, read_by_office_at, read_by_caregiver_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7, now() - ($8::int * interval '1 minute'),
+                 CASE WHEN $7 AND $9 THEN now() WHEN NOT $7 THEN now() - ($8::int * interval '1 minute') END,
+                 CASE WHEN NOT $7 AND $9 THEN now() WHEN $7 THEN now() - ($8::int * interval '1 minute') END)`,
+        [m.id, ORG_PRIMARY, m.caregiverId, m.sender, m.text, m.time, m.mine, m.minutesAgo ?? 0, m.read !== false]
       );
     }
 

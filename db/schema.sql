@@ -366,7 +366,17 @@ CREATE TABLE IF NOT EXISTS messages (
   body            text NOT NULL,
   time            text NOT NULL,
   mine            boolean NOT NULL DEFAULT false,
-  created_at      timestamptz NOT NULL DEFAULT now()
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  -- Office inbox, added 2026-09-25 (db/migrations/2026-09-25-03-office-
+  -- messages.sql). `mine` = sent BY the caregiver. read_by_office_at /
+  -- read_by_caregiver_at drive the unread badges. sender_user_id is the
+  -- office user who replied (NULL for caregiver or seeded messages).
+  -- source: 'app', or 'sms' when a caregiver texted the agency's Hearth
+  -- number and it was matched to them (app/api/webhooks/twilio/sms).
+  read_by_office_at    timestamptz,
+  read_by_caregiver_at timestamptz,
+  sender_user_id       text,
+  source               text NOT NULL DEFAULT 'app' CHECK (source IN ('app', 'sms'))
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -884,6 +894,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   updated_at          timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS idx_messages_org_caregiver ON messages(organization_id, caregiver_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_org_created ON notifications(organization_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_provider_msg ON notifications(provider_message_id);
 

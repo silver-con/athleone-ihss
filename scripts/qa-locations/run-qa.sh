@@ -97,10 +97,10 @@ psql -q -d "$DB_NAME" -c "TRUNCATE organizations CASCADE;" 2>/dev/null
 mkdir -p "$WORK/comms"
 cp "$REPO"/lib/comms/*.js "$WORK/comms/"
 sed -i.bak -e "s|from '@/lib/comms/\([a-z0-9-]*\)'|from './\1.js'|" -e "s|from '@/lib/queries'|from '../queries.js'|" "$WORK"/comms/*.js && rm -f "$WORK"/comms/*.bak
-for extra in sign-in.js messaging.js docusign-connect.js; do
+for extra in sign-in.js messaging.js inbound-sms.js docusign-connect.js format-time.js; do
   if [[ -f "$REPO/lib/$extra" ]]; then
     cp "$REPO/lib/$extra" "$WORK/"
-    sed -i.bak -e "s|from '@/lib/comms'|from './comms/index.js'|" -e "s|from '@/lib/comms/\([a-z0-9-]*\)'|from './comms/\1.js'|" -e "s|from '@/lib/queries'|from './queries.js'|" -e "s|from '@/lib/passwords'|from './passwords.js'|" "$WORK/$extra" && rm -f "$WORK/$extra.bak"
+    sed -i.bak -e "s|from '@/lib/comms'|from './comms/index.js'|" -e "s|from '@/lib/comms/\([a-z0-9-]*\)'|from './comms/\1.js'|" -e "s|from '@/lib/queries'|from './queries.js'|" -e "s|from '@/lib/passwords'|from './passwords.js'|" -e "s|from '@/lib/messaging'|from './messaging.js'|" "$WORK/$extra" && rm -f "$WORK/$extra.bak"
   fi
 done
 for suite in "$QA_DIR"/qa-2026-09-25-*.mjs; do

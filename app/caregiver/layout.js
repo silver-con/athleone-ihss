@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getSession } from '@/lib/auth';
 import { logoutAction } from '@/actions/auth';
-import { getCaregiver, getOnboardingState } from '@/lib/queries';
+import { getCaregiver, getOnboardingState, getCaregiverUnreadMessageCount } from '@/lib/queries';
 import CaregiverTabs from './CaregiverTabs';
 
 function initials(name) {
@@ -18,6 +18,7 @@ export default async function CaregiverLayout({ children }) {
       ? await getOnboardingState(session.organizationId, session.caregiverId)
       : null;
   const showOnboardingBanner = onboarding && !onboarding.caregiverStepsComplete;
+  const unreadMessages = session?.caregiverId ? await getCaregiverUnreadMessageCount(session.organizationId, session.caregiverId) : 0;
 
   return (
     <div className="min-h-screen flex items-start justify-center py-8 px-4">
@@ -88,7 +89,7 @@ export default async function CaregiverLayout({ children }) {
         {/* Page content */}
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-5">{children}</div>
 
-        <CaregiverTabs />
+        <CaregiverTabs badges={{ unreadMessages }} />
       </div>
     </div>
   );

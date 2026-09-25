@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/actions/auth';
 import * as db from '@/lib/queries';
 import { isVisitLocation } from '@/lib/geo';
+import { notifyOfficeOfCaregiverMessage } from '@/lib/messaging';
 
 // Every action here re-checks that the visit/thread actually belongs to
 // the signed-in caregiver — the UI only ever shows a caregiver their own
@@ -71,6 +72,7 @@ export async function toggleVisitTaskAction(visitId, taskId) {
 export async function sendMessageAction(formData) {
   const session = await requirePermission('caregiver.messages.send');
   const text = String(formData.get('text') || '');
-  await db.sendCaregiverMessage(session.organizationId, session.caregiverId, session.name, text);
+  const id = await db.sendCaregiverMessage(session.organizationId, session.caregiverId, session.name, text);
+  if (id) await notifyOfficeOfCaregiverMessage(session.organizationId, session.caregiverId, text);
   revalidatePath('/caregiver/messages');
 }

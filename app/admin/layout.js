@@ -2,13 +2,19 @@ import Link from "next/link";
 import AdminSidebar from "@/components/AdminSidebar";
 import { getSession } from "@/lib/auth";
 import { logoutAction } from "@/actions/auth";
+import { getOfficeUnreadMessageCount } from "@/lib/queries";
+import { hasPermission } from "@/lib/permissions";
 
 export default async function AdminLayout({ children }) {
   const session = await getSession();
+  const unreadMessages =
+    session?.organizationId && hasPermission(session.role, "admin.messages.view")
+      ? await getOfficeUnreadMessageCount(session.organizationId, session.locationId || null)
+      : 0;
 
   return (
     <div className="flex min-h-screen">
-      <AdminSidebar role={session?.role} />
+      <AdminSidebar role={session?.role} badges={{ unreadMessages }} />
       <main className="flex-1 min-w-0 px-10 py-8">
         {session && (
           <div className="no-print flex items-center justify-end gap-3 mb-4 -mt-2">

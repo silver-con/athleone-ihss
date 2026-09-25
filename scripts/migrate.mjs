@@ -96,7 +96,18 @@ async function main() {
   }
 
   console.log('==> Applying db/schema.sql (creates any table that does not exist yet)');
-  await client.query(readFileSync(path.join(ROOT, 'db', 'schema.sql'), 'utf8'));
+  const schemaSql = readFileSync(path.join(ROOT, 'db', 'schema.sql'), 'utf8');
+  let schemaDeferred = false;
+  try {
+    await client.query(schemaSql);
+  } catch (err) {
+    // On an existing database schema.sql can fail if it indexes a column
+    // that a pending migration hasn't added yet. Run the migrations first,
+    // then apply schema.sql again (below). A fresh database has no excuse.
+    if (!hadOrganizations) throw err;
+    console.log(`    schema.sql needs a pending migration first (${err.message}) — running migrations, then retrying.`);
+    schemaDeferred = true;
+  }
 
   await client.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
     id         text PRIMARY KEY,
@@ -147,6 +158,10 @@ async function main() {
       ran++;
     }
     console.log(ran ? `==> ${ran} migration(s) applied.` : '==> Already up to date — nothing to run.');
+    if (schemaDeferred) {
+      console.log('==> Applying db/schema.sql again');
+      await client.query(schemaSql);
+    }
   }
   await client.end();
 
