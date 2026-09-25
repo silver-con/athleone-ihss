@@ -248,6 +248,10 @@ async function run() {
   process.env.SENDGRID_API_KEY = 'SG.x';
   process.env.EMAIL_FROM = 'H <h@x.test>';
   check('production + email connected: deliverable', S.canDeliver('email'));
+  await db.updateTwoFactorSettings(ORG, adminId, { method: 'sms', mobilePhone: '+15125550147' });
+  const smsUser = await subjectOf(adminId);
+  eq('chose text, texting not connected but email is -> code goes by email', [S.twoFactorPlan(smsUser).channel, S.twoFactorPlan(smsUser).deliverable], ['email', true]);
+  await db.updateTwoFactorSettings(ORG, adminId, { method: 'email', mobilePhone: null });
   eq('platform admins get an email code whenever email is connected', S.twoFactorPlan({ kind: 'platform', id: 'pa-1', email: 'ops@hearth.test' })?.channel, 'email');
   for (const k of ['EMAIL_PROVIDER', 'SENDGRID_API_KEY', 'EMAIL_FROM']) delete process.env[k];
   process.env.NODE_ENV = prevEnv;

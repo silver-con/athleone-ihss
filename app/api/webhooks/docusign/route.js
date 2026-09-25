@@ -51,10 +51,14 @@ export async function POST(request) {
       confirmCompleted: async (envelopeId) => (await getEnvelope(credentials, envelopeId)).status === 'completed',
     });
   } catch (err) {
-    // DocuSign's API couldn't be reached to confirm — answer non-200 so
-    // Connect retries the event later.
-    console.error('[docusign-connect] could not confirm envelope status:', err.message);
-    return new Response('Retry later', { status: 503 });
+    // Temporary trouble (network, DocuSign 5xx, rate limit): answer 503 so
+    // Connect retries later. A permanent error (envelope deleted, bad
+    // credentials) would retry forever, so acknowledge it and log instead —
+    // the office can still use the manual status check.
+    const status = Number(err?.status) || 0;
+    const transient = !status || status >= 500 || status === 429;
+    console.error(`[docusign-connect] could not confirm envelope status (${status || 'network'}): ${err.message}`);
+    return transient ? new Response('Retry later', { status: 503 }) : new Response(null, { status: 200 });
   }
   console.log(`[docusign-connect] ${result.status || 'event'} ${result.envelopeId || ''} packets=${result.packets} orientations=${result.orientations}${result.unconfirmed ? ' (not confirmed by DocuSign API — ignored)' : ''}`);
   return new Response(null, { status: 200 });
