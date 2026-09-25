@@ -18,6 +18,22 @@ All three read and write the same **Postgres database** — an action in one
 is immediately visible to the others, because it's the same rows, not
 shared browser state.
 
+## Start here
+
+- **New to the codebase?** Read [`docs/LEARN-HEARTH.md`](docs/LEARN-HEARTH.md): roles, a client demo script, how the code fits together, and a glossary.
+- **Deploying?** [`deploy/DEPLOY-DIGITALOCEAN.md`](deploy/DEPLOY-DIGITALOCEAN.md): one Droplet with automatic HTTPS, or App Platform.
+- **Phone app?** [`mobile/README.md`](mobile/README.md): install from the website, or build the Android APK on GitHub.
+- **Something broken?** [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
+
+### Added 2026-09-25
+
+- **Email and SMS**, pluggable. Email: SendGrid, Postmark, Resend or any SMTP. SMS: Twilio. You choose them with environment variables (`.env.production.example`). With no keys, every message is recorded in an outbox (**Admin → Communications**) instead of being sent.
+- **Forgot password**, **two-step sign-in** (email or text codes; agencies can require it for office staff), and **welcome emails** with a set-your-password link.
+- **Office Messages inbox** (`/admin/messages`). Caregivers get notified by text or email; caregivers can text the agency number and the text lands in their thread.
+- **DocuSign Connect**: signed envelopes update Hearth automatically.
+- **Production kit**: Dockerfile, docker-compose with Caddy HTTPS, a startup config check, security headers, a health check, error pages, and one migration command (`npm run db:migrate`).
+- **Caregiver app on phones**: installable web app, plus an Android APK project and a GitHub workflow that builds it.
+
 ## Architecture
 
 - **Next.js 16** (App Router, Turbopack), React 19. Every page that reads
@@ -67,15 +83,15 @@ work; any Postgres does).
    cp .env.example .env
    ```
 
-3. **Create the tables:**
+3. **Create (or update) the tables:**
 
    ```bash
-   npm run db:setup
+   npm run db:migrate
    ```
 
-   This runs `db/schema.sql` against `$DATABASE_URL` with `psql`. If you
-   don't have `psql` installed locally, paste the contents of
-   `db/schema.sql` into your database provider's SQL console instead.
+   On an empty database this builds everything from `db/schema.sql`; on an
+   existing one it applies only the changes you don't have yet. Safe to run
+   any time. `npm run db:migrate:status` shows what's applied.
 
 4. **Seed sample data and demo logins:**
 
@@ -254,25 +270,20 @@ components/                        Shared UI (StatTile, charts, Toast, per-role
 - All client, payer, caregiver and case data (Eleanor Whitfield, Jamie
   Reyes RN, Molina Healthcare, Maria Alvarez, etc.) is fictional sample
   data for demonstration only.
-- The schedule/EVV data models a fixed demo week (Mon 9/14–Sun 9/20, with
-  Tue 9/15 treated as "today") rather than the actual current date, so the
-  mix of completed/in-progress/missed/scheduled visits stays the same no
-  matter when you run this. Re-running `npm run db:seed` resets to that
-  starting point.
-- Sessions are a signed JWT in an httpOnly cookie, valid 7 days. There's no
-  password reset, email verification, or account self-service — this is a
-  demo auth system, not a production-ready one. Rotate `SESSION_SECRET`
-  and the demo passwords before using this anywhere beyond a prototype.
+- Screens run on the real calendar. `npm run db:seed` shifts the demo
+  visits so the demo's "today" is the actual today.
+- Sessions are a signed JWT in an httpOnly cookie, valid 12 hours and
+  re-checked against the database on every request. Password reset,
+  two-step sign-in and account lockout are built in. Change the demo
+  passwords (or don't seed) on any server with real data.
 
 ## Deploying
 
-You'll need your own Postgres instance in production (this can't provision
-one for you) — Supabase, Neon, Railway, or a managed Postgres from any
-cloud provider all work. Point `DATABASE_URL` at it, set a real
-`SESSION_SECRET`, run `npm run db:setup` once against it, seed or
-hand-create your real users, then `npm run build && npm run start` (or
-deploy to your platform of choice — this is a standard Next.js app with no
-platform-specific dependencies).
+See [`deploy/DEPLOY-DIGITALOCEAN.md`](deploy/DEPLOY-DIGITALOCEAN.md). In
+short, on a fresh Ubuntu Droplet: `sudo bash deploy/setup-droplet.sh`. It
+installs Docker, generates secrets, and starts the app, Postgres and Caddy
+(automatic HTTPS). Database migrations run automatically every time the
+app starts. Production settings are documented in `.env.production.example`.
 
 ## Texas EVV compliance modeling — sources & confidence
 

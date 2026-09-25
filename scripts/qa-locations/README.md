@@ -25,6 +25,10 @@ databases in — the same one `npm run db:setup` talks to.
 | `qa-roles.mjs` | 34 assertions on the three-tier model: the `LOCATION_ADMIN` role, `createOrgUser`'s role/location contract, `getOrgStaff`, `updateLocation`, and reassigning a caregiver/client to a different location. |
 | `qa-scoping.mjs` | 26 assertions on LOCATION_ADMIN read/write scoping — every reader a location admin's pages call narrows to one location, writers reject another tenant's location id, inactive locations are refused as a destination for new work. |
 | `qa-referral-create.mjs` | 21 assertions on manual referral entry (`/referrals/new`) — required-field validation, tenant scoping, trimming, and that a manually-created referral flows into `submitIntake` exactly like a fax-sourced one. |
+| `qa-2026-09-25-comms.mjs` | Email/SMS layer: provider config, outbox, sensitive-body redaction, failure containment, Twilio signatures (checked against the official library) and delivery receipts, tenant scoping. Uses a fake `fetch`, so no real provider is called. |
+| `qa-2026-09-25-sign-in.mjs` | Forgot password (no account enumeration, hashed single-use tokens, expiry, rate limits), two-step codes (hashing, attempts, expiry, replay, daily cap), production-without-email behaviour, platform-admin session invalidation. |
+| `qa-2026-09-25-messages.mjs` | Office inbox scoping and unread counts, caregiver/office notifications per agency setting, inbound texts (matching, ambiguity, retries, STOP), display times. |
+| `qa-2026-09-25-docusign-welcome.mjs` | DocuSign Connect HMAC (checked against openssl), event parsing, API confirmation before marking signed, per-agency isolation; welcome invite links. |
 | `migration.sql` | The locations-feature migration for an existing dev database, verbatim from the SCHEMA DRIFT WARNING in `db/schema.sql`. Separate drift warnings for the other schema changes (the `LOCATION_ADMIN` CHECK constraint, `platform_admins.active`/`platform_role`) live directly in `db/schema.sql` — see the comments there. |
 
 ## Discipline this suite follows

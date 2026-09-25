@@ -288,3 +288,43 @@ debugging it — consider having them redirect with a distinct
 `?esignError=` reason code each (e.g. `no_caregiver`, `not_connected`,
 `no_email`) instead of silently returning to a clean URL, so this class of
 bug doesn't require re-deriving the cause from scratch next time.
+
+---
+
+## 2026-09-25 — QA `HARNESS ERROR: The clock-out must be after the clock-in` (qa-bill-hours)
+
+**Symptom:** `run-qa.sh` fails only in the afternoon/evening, in the bill-hours suite.
+**Root cause:** the test set the visit's clock-in timestamp to `now() - 2 days`, so the
+clock-in carried the current time of day; after 11:00 AM the suite's `11:00` clock-out was
+"before" it. Test bug, not an app bug.
+**Fix:** pinned to 9:00 AM Central on the service date. Same commit made `run-qa.sh` resolve
+a relative repo path (`./run-qa.sh .` used to create a dangling `node_modules` link and every
+suite failed with `Cannot find package 'bcryptjs'`).
+
+## 2026-09-25 — `"next start" does not work with "output: standalone"`
+
+**Cause:** `next.config.mjs` now builds a standalone server (for Docker).
+**Fix:** use `npm run build && npm start` — both scripts were updated (`start` runs
+`.next/standalone/server.js`, `build` copies `public/` and `.next/static` into it).
+
+## 2026-09-25 — `self-signed certificate in certificate chain` connecting to DigitalOcean Postgres
+
+**Cause:** managed Postgres URLs end in `?sslmode=require`; the `pg` driver treats that as full
+certificate verification, which fails against DigitalOcean's own CA.
+**Fix (built in):** `lib/pg-config.js` turns sslmode into an explicit TLS setting — encrypted
+always, certificate verified when `DATABASE_CA_CERT` holds the provider's CA certificate.
+
+## 2026-09-25 — production server exits at startup with `[hearth] CONFIG ERROR: …`
+
+**Cause:** deliberate — `instrumentation.js` refuses to start in production if
+`DATABASE_URL`, `SESSION_SECRET` (32+ chars, not a placeholder such as "dev-only…" or
+"replace-this…") or `EVV_CREDENTIALS_KEY` (64 hex) is missing or bad. The log names the
+variable. In development the same problems are only warnings.
+
+## 2026-09-25 — forgot-password / welcome email / sign-in code never arrives on the server
+
+Check the app log at startup: `WARNING: Email is not connected …`. In production, with no email
+provider, Hearth deliberately creates no reset links or codes and never prints them to the log
+(anyone with log access could take over accounts). Connect a provider
+(`.env.production.example`), restart, and use **Communications → Send test email**. Also check
+`APP_BASE_URL` is set — without it no links are sent in production.
