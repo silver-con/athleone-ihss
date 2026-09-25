@@ -14,6 +14,8 @@ import {
   logAuditEvent,
 } from '@/lib/queries';
 import { passwordProblem, generateTemporaryPassword } from '@/lib/passwords';
+import { sendWelcomeInvite } from '@/lib/sign-in';
+import { trustedBaseUrl } from '@/lib/request-url';
 
 // Organization staffing. Before this existed there was no way to create an
 // ADMIN, LOCATION_ADMIN or COORDINATOR account through the UI at all — only
@@ -77,12 +79,20 @@ export async function createTeamMemberAction(prevState, formData) {
   }
 
   await audit(session, 'create_team_member', newUserId, `${role}${locationId ? ' (location-scoped)' : ''}`);
+  const welcome = await sendWelcomeInvite(email, { baseUrl: await trustedBaseUrl(), role });
 
   revalidatePath('/admin/team');
   return {
     error: null,
-    success: `${name} added as ${role === 'LOCATION_ADMIN' ? 'a location admin' : role === 'ADMIN' ? 'an organization admin' : 'a coordinator'}. They'll be asked to choose their own password the first time they sign in.`,
+    success: `${name} added as ${role === 'LOCATION_ADMIN' ? 'a location admin' : role === 'ADMIN' ? 'an organization admin' : 'a coordinator'}. They'll be asked to choose their own password the first time they sign in.${welcomeNote(welcome)}`,
   };
+}
+
+function welcomeNote(result) {
+  if (!result) return '';
+  if (result.status === 'sent') return ' A welcome email with a link to choose their password is on its way.';
+  if (result.status === 'logged') return ' (Email isn’t connected yet, so no welcome email went out — share the starting password yourself.)';
+  return ' The welcome email could not be sent — share the starting password yourself.';
 }
 
 async function audit(session, action, entityId, detail) {

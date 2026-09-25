@@ -221,3 +221,29 @@ export async function checkOrientationSigningStatusAction(orientationId) {
     return { error: err.message || 'Could not check the envelope status.' };
   }
 }
+
+// DocuSign Connect HMAC secret (E-Signature page). Blank + "remove" clears
+// it; the secret is encrypted like the private key and never shown again.
+export async function saveDocusignConnectKeyAction(prevState, formData) {
+  const session = await requirePermission('admin.esign.manage');
+  const remove = formData.get('remove') === '1';
+  const secret = String(formData.get('hmacKey') || '').trim();
+  if (!remove && secret.length < 16) return { error: 'Paste the HMAC key from DocuSign (Settings → Connect → HMAC keys).' };
+  try {
+    await db.setDocusignConnectKey(session.organizationId, remove ? null : encryptSecret(secret));
+  } catch (err) {
+    return { error: err.message || 'Could not save.' };
+  }
+  await db.logAuditEvent(session.organizationId, {
+    actorUserId: session.userId,
+    actorName: session.name,
+    actorRole: session.role,
+    locationId: session.locationId,
+    action: remove ? 'docusign_connect_removed' : 'docusign_connect_key_saved',
+    entityType: 'organization',
+    entityId: session.organizationId,
+    detail: remove ? 'DocuSign Connect HMAC key removed' : 'DocuSign Connect HMAC key saved',
+  });
+  revalidatePath('/admin/esign');
+  return { success: remove ? 'Removed. Status updates will need the manual check again.' : 'Saved. Hearth will now accept signed events from DocuSign.' };
+}

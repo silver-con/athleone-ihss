@@ -101,7 +101,22 @@ export default async function EvvSyncPage() {
         </div>
       </div>
 
-      <EvvCredentialsForm credentials={credentials} />
+      {/* Only the fields the form shows — the encrypted client id/secret
+          never go to the browser, even encrypted. */}
+      <EvvCredentialsForm
+        credentials={
+          credentials && {
+            apiBaseUrl: credentials.apiBaseUrl,
+            apiVersion: credentials.apiVersion,
+            environment: credentials.environment,
+            officeIdentifier: credentials.officeIdentifier,
+            officeQualifier: credentials.officeQualifier,
+            payerId: credentials.payerId,
+            providerTaxId: credentials.providerTaxId,
+            scope: credentials.scope,
+          }
+        }
+      />
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden mt-4">
         <div className="grid grid-cols-[1.2fr_1.1fr_0.9fr_1fr_1.3fr_1.6fr] px-5 py-3 text-[11px] font-display font-bold uppercase tracking-wide text-[var(--muted)] border-b border-[var(--border)]">

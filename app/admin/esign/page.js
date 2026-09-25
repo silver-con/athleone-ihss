@@ -4,6 +4,8 @@ import { getDocusignCredentials } from '@/lib/queries';
 import StatTile from '@/components/StatTile';
 import DocusignCredentialsForm from '@/components/admin/DocusignCredentialsForm';
 import DocusignTestButton from '@/components/admin/DocusignTestButton';
+import DocusignConnectForm from '@/components/admin/DocusignConnectForm';
+import { appBaseUrl } from '@/lib/comms/config';
 
 const ENV_LABEL = { demo: 'Demo / Developer', production: 'Production' };
 
@@ -60,7 +62,26 @@ export default async function EsignSettingsPage() {
         </div>
       </div>
 
-      <DocusignCredentialsForm credentials={credentials} />
+      {/* Only the fields the form shows — never the encrypted key blobs. */}
+      <DocusignCredentialsForm
+        credentials={
+          credentials && {
+            integrationKey: credentials.integrationKey,
+            apiUsername: credentials.apiUsername,
+            accountId: credentials.accountId,
+            environment: credentials.environment,
+            status: credentials.status,
+            baaOnFile: credentials.baaOnFile,
+          }
+        }
+      />
+
+      <DocusignConnectForm
+        webhookUrl={appBaseUrl() ? `${appBaseUrl()}/api/webhooks/docusign?org=${encodeURIComponent(session.organizationId)}` : null}
+        configured={Boolean(credentials?.connectConfigured)}
+        lastEventAt={credentials?.connectLastEventAt || null}
+        connectionSaved={Boolean(credentials)}
+      />
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 mt-4">
         <div className="font-display font-extrabold text-[14.5px] mb-2">What&rsquo;s wired up</div>

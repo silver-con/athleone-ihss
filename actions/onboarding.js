@@ -1,5 +1,7 @@
 'use server';
 
+import { sendWelcomeInvite } from '@/lib/sign-in';
+import { trustedBaseUrl } from '@/lib/request-url';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/actions/auth';
@@ -127,6 +129,7 @@ export async function addCaregiverAction(prevState, formData) {
   } catch (err) {
     return { error: err.message || 'Could not create the caregiver.' };
   }
+  await sendWelcomeInvite(email, { baseUrl: await trustedBaseUrl(), role: 'CAREGIVER' });
 
   revalidatePath('/admin/caregivers');
   redirect(`/admin/caregivers/${caregiverId}`);

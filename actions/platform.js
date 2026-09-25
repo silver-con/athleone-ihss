@@ -1,5 +1,7 @@
 'use server';
 
+import { sendWelcomeInvite } from '@/lib/sign-in';
+import { trustedBaseUrl } from '@/lib/request-url';
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/actions/auth';
 import { hashPassword } from '@/lib/auth';
@@ -86,6 +88,7 @@ export async function createOrganizationAction(prevState, formData) {
     `Created "${organizationName}" (org ${result.organizationId}), admin ${email}`
   );
 
+  await sendWelcomeInvite(email, { baseUrl: await trustedBaseUrl(), role: 'ADMIN' });
   revalidatePath('/platform');
 
   return {

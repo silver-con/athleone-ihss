@@ -844,7 +844,12 @@ CREATE TABLE IF NOT EXISTS organization_docusign_credentials (
   status          text NOT NULL DEFAULT 'not_started' CHECK (status IN ('not_started', 'testing', 'connected', 'disabled')),
   baa_on_file     boolean NOT NULL DEFAULT false,
   last_success_at timestamptz,
-  created_at      timestamptz NOT NULL DEFAULT now()
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  -- DocuSign Connect (automatic status updates), added 2026-09-25: the
+  -- HMAC secret DocuSign signs each event with (encrypted like the private
+  -- key, lib/secrets.js), and when the last verified event arrived.
+  connect_hmac_key_enc  text,
+  connect_last_event_at timestamptz
 );
 
 CREATE INDEX IF NOT EXISTS idx_service_auth_org ON service_authorizations(organization_id);
