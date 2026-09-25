@@ -17,8 +17,11 @@ const config = {
   webDir: 'www',
   server: {
     url: `${serverUrl}/caregiver`,
-    // Only https, and only our own host, loads inside the app; other links
-    // (DocuSign signing, maps) open in the system browser.
+    // Only https. Our own host loads inside the app — and so does DocuSign,
+    // on purpose: embedded signing then returns to Hearth inside the app,
+    // still signed in. (Trade-off: DocuSign's pages run in the app's
+    // WebView; no native plugins are installed, so there's nothing for them
+    // to reach.) Any other link opens in the system browser.
     cleartext: false,
     allowNavigation: [new URL(serverUrl).host, '*.docusign.net', '*.docusign.com'],
     errorPath: 'offline.html',

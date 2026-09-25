@@ -16,7 +16,7 @@ export async function POST(request) {
     console.warn(`[twilio] inbound sms rejected: ${reason}`);
     return new Response('Forbidden', { status: 403 });
   }
-  const result = await handleInboundSms({ from: params.From, body: params.Body });
+  const result = await handleInboundSms({ from: params.From, body: params.Body, messageSid: params.MessageSid || null });
   console.log(`[twilio] inbound sms ${result.filed ? 'filed' : 'not filed'}`);
   return new Response(twiml(result.reply), { status: 200, headers: { 'Content-Type': 'text/xml' } });
 }

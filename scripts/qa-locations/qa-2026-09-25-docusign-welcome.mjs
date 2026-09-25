@@ -53,18 +53,27 @@ async function run() {
   await db.markPacketSent(ORG, 'ds-cg', 'env-1');
   await db.markPacketSent(OTHER, 'ds-cg2', 'env-1'); // same id in another agency must not be touched
   await query(`INSERT INTO caregiver_orientations (id, organization_id, caregiver_id, client_id, orientation_type, status, envelope_id) VALUES ('ds-o1',$1,'ds-cg','ds-c','initial','draft','env-2')`, [ORG]);
-  let r = await applyConnectEvent(ORG, JSON.parse(body));
+  const confirmed = [];
+  const yes = async (id) => { confirmed.push(id); return true; };
+  const no = async () => false;
+  let r = await applyConnectEvent(ORG, JSON.parse(body), { confirmCompleted: no });
+  check('a completed event DocuSign\'s API does not confirm marks nothing', r.packets === 0 && r.unconfirmed);
+  check('  ...documents still "sent"', (await query(`SELECT status FROM caregiver_documents WHERE organization_id = $1 AND caregiver_id = 'ds-cg'`, [ORG])).every((d) => d.status === 'sent'));
+  r = await applyConnectEvent(ORG, JSON.parse(body), { confirmCompleted: yes });
   eq('a completed packet envelope marks the packet signed', r.packets, 1);
   const docs = await query(`SELECT status FROM caregiver_documents WHERE organization_id = $1 AND caregiver_id = 'ds-cg'`, [ORG]);
   check('  ...every packet document is signed', docs.length === 3 && docs.every((d) => d.status === 'signed'));
   const otherDocs = await query(`SELECT status FROM caregiver_documents WHERE organization_id = $1`, [OTHER]);
   check('  ...another agency’s documents with the same envelope id are untouched', otherDocs.every((d) => d.status === 'sent'));
-  r = await applyConnectEvent(ORG, { envelopeId: 'env-2', status: 'sent' });
+  r = await applyConnectEvent(ORG, { envelopeId: 'env-2', status: 'sent' }, { confirmCompleted: yes });
   check('a non-completed status changes nothing', r.orientations === 0 && (await queryOne(`SELECT status FROM caregiver_orientations WHERE id = 'ds-o1'`)).status === 'draft');
-  r = await applyConnectEvent(ORG, { event: 'envelope-completed', data: { envelopeId: 'env-2', envelopeSummary: { status: 'completed' } } });
+  r = await applyConnectEvent(ORG, { event: 'envelope-completed', data: { envelopeId: 'env-2', envelopeSummary: { status: 'completed' } } }, { confirmCompleted: yes });
   check('a completed orientation envelope completes the orientation', r.orientations === 1 && (await queryOne(`SELECT status FROM caregiver_orientations WHERE id = 'ds-o1'`)).status === 'completed');
-  r = await applyConnectEvent(ORG, { envelopeId: 'env-unknown', status: 'completed' });
+  const calls = confirmed.length;
+  r = await applyConnectEvent(ORG, { envelopeId: 'env-unknown', status: 'completed' }, { confirmCompleted: yes });
   check('an unknown envelope is harmless', r.packets === 0 && r.orientations === 0);
+  eq('  ...and DocuSign isn\'t even asked about it', confirmed.length, calls);
+  eq('the API is asked about the right envelope', confirmed[0], 'env-1');
 
   console.log('\n== storing the Connect key ==');
   let threw = null;
@@ -74,7 +83,7 @@ async function run() {
   await db.setDocusignConnectKey(ORG, 'encrypted-blob');
   let c = await db.getDocusignCredentials(ORG);
   check('saved and reported as configured', c.connectConfigured && c.connectHmacKeyEnc === 'encrypted-blob');
-  await applyConnectEvent(ORG, { envelopeId: 'x', status: 'sent' });
+  await applyConnectEvent(ORG, { envelopeId: 'x', status: 'sent' }, { confirmCompleted: yes });
   check('an event records when it arrived', Boolean((await db.getDocusignCredentials(ORG)).connectLastEventAt));
   await db.setDocusignConnectKey(ORG, null);
   check('can be removed', !(await db.getDocusignCredentials(ORG)).connectConfigured);

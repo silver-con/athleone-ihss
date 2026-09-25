@@ -6,6 +6,7 @@ import { getSession, hashPassword, setSessionCookie } from '@/lib/auth';
 import { requirePermission } from '@/actions/auth';
 import { changeOwnPassword, logAuditEvent, getTwoFactorSettings, updateTwoFactorSettings, verifyOwnPassword } from '@/lib/queries';
 import { toE164 } from '@/lib/comms/phone';
+import { canDeliver } from '@/lib/sign-in';
 import { passwordProblem } from '@/lib/passwords';
 import { PERMISSIONS, ROLE_HOME } from '@/lib/permissions';
 
@@ -91,6 +92,11 @@ export async function saveTwoFactorAction(prevState, formData) {
   }
   if (method === 'sms' && !mobilePhone && !toE164(current.caregiverPhone)) {
     return { error: 'Enter the mobile number the codes should go to.' };
+  }
+  if (method !== 'off' && !canDeliver(method)) {
+    return {
+      error: `${method === 'sms' ? 'Texting' : 'Email'} isn’t connected on this server yet, so codes couldn’t reach you. Ask your administrator to connect it first.`,
+    };
   }
   if (!(await verifyOwnPassword(session.organizationId, session.userId, password))) {
     return { error: 'Your current password is incorrect.' };

@@ -180,7 +180,8 @@ async function run() {
   const pa = await db.createPlatformAdmin({ name: 'Pat Platform', email: 'pat@ac.test', passwordHash: await hash(PW), platformRole: 'full' });
   const paLogin = await db.authenticateLogin('pat@ac.test', PW);
   eq('a platform admin signs in through the same form', paLogin.kind, 'platform');
-  const paPayload = { userId: pa.id, role: 'PLATFORM_ADMIN', organizationId: null };
+  const paPayload = { userId: pa.id, role: 'PLATFORM_ADMIN', organizationId: null, sv: paLogin.admin.sessionVersion };
+  eq('  ...a platform token without a session version is refused', await db.getSessionAccountState({ ...paPayload, sv: undefined }), null);
   check('  ...with a live session', (await db.getSessionAccountState(paPayload)) !== null);
   await query('UPDATE platform_admins SET active = false WHERE id = $1', [pa.id]);
   eq('a deactivated platform admin\'s session stops working', await db.getSessionAccountState(paPayload), null);

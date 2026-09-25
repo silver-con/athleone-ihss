@@ -376,8 +376,13 @@ CREATE TABLE IF NOT EXISTS messages (
   read_by_office_at    timestamptz,
   read_by_caregiver_at timestamptz,
   sender_user_id       text,
-  source               text NOT NULL DEFAULT 'app' CHECK (source IN ('app', 'sms'))
+  source               text NOT NULL DEFAULT 'app' CHECK (source IN ('app', 'sms')),
+  -- The provider's id for an inbound text (Twilio MessageSid), so a
+  -- webhook retry can't file the same text twice.
+  external_id          text
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_external_id ON messages(external_id) WHERE external_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS users (
   id              text PRIMARY KEY,
@@ -487,7 +492,10 @@ CREATE TABLE IF NOT EXISTS platform_admins (
   name          text NOT NULL,
   active        boolean NOT NULL DEFAULT true,
   platform_role text NOT NULL DEFAULT 'full' CHECK (platform_role IN ('support', 'full')),
-  created_at    timestamptz NOT NULL DEFAULT now()
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  -- Same idea as users.session_version (2026-09-25): bumped by a password
+  -- reset so every existing platform-admin session is signed out.
+  session_version integer NOT NULL DEFAULT 1
 );
 
 -- Every platform-admin session records what it looked at — the spec's

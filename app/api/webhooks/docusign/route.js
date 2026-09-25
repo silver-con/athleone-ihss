@@ -4,6 +4,7 @@
 import * as db from '@/lib/queries';
 import { decryptSecret } from '@/lib/secrets';
 import { isValidConnectSignature, signaturesFromHeaders, applyConnectEvent } from '@/lib/docusign-connect';
+import { getEnvelope } from '@/lib/docusign';
 
 const MAX_BODY = 5 * 1024 * 1024; // Connect can include documents if misconfigured; refuse huge bodies
 
@@ -11,6 +12,10 @@ export async function POST(request) {
   const org = new URL(request.url).searchParams.get('org');
   if (!org) return new Response('Missing org', { status: 400 });
 
+  // Refuse big bodies before reading them (the signature can only be
+  // checked after reading, so this is what stops an unsigned flood).
+  const declared = Number(request.headers.get('content-length') || 0);
+  if (declared > MAX_BODY) return new Response('Too large', { status: 413 });
   const raw = await request.text();
   if (raw.length > MAX_BODY) return new Response('Too large', { status: 413 });
 
@@ -40,7 +45,17 @@ export async function POST(request) {
     console.warn('[docusign-connect] signed event was not JSON — set Connect data format to JSON (SIM)');
     return new Response(null, { status: 200 });
   }
-  const result = await applyConnectEvent(org, body);
-  console.log(`[docusign-connect] ${result.status || 'event'} ${result.envelopeId || ''} packets=${result.packets} orientations=${result.orientations}`);
+  let result;
+  try {
+    result = await applyConnectEvent(org, body, {
+      confirmCompleted: async (envelopeId) => (await getEnvelope(credentials, envelopeId)).status === 'completed',
+    });
+  } catch (err) {
+    // DocuSign's API couldn't be reached to confirm — answer non-200 so
+    // Connect retries the event later.
+    console.error('[docusign-connect] could not confirm envelope status:', err.message);
+    return new Response('Retry later', { status: 503 });
+  }
+  console.log(`[docusign-connect] ${result.status || 'event'} ${result.envelopeId || ''} packets=${result.packets} orientations=${result.orientations}${result.unconfirmed ? ' (not confirmed by DocuSign API — ignored)' : ''}`);
   return new Response(null, { status: 200 });
 }

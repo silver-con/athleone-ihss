@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/actions/auth';
 import * as db from '@/lib/queries';
+import { canDeliver } from '@/lib/sign-in';
 
 // Agency settings page (/admin/settings). The first two entries of the
 // per-agency "configurator" — see vesta-evv-feature-reference.md.
@@ -52,6 +53,9 @@ export async function updateSignInSecurityAction(prevState, formData) {
   const required = formData.get('requireTwoFactor') === 'on';
   const before = await db.getOrganization(session.organizationId);
   if (Boolean(before.requireTwoFactor) === required) return { error: null, success: 'No changes.' };
+  if (required && !canDeliver('email')) {
+    return { error: 'Connect email first (Communications page) — otherwise office staff couldn’t receive their codes.', success: null };
+  }
   await db.updateOrganizationRequireTwoFactor(session.organizationId, required);
   await db.logAuditEvent(session.organizationId, {
     actorUserId: session.userId,

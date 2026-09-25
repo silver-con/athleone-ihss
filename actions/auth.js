@@ -2,11 +2,11 @@
 
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
-import { authenticateLogin, loadSignInAccount, getSignInChallenge, consumeSignInChallenge } from '@/lib/queries';
+import { authenticateLogin, loadSignInAccount, getSignInChallenge, consumeSignInChallenge, logAuditEvent } from '@/lib/queries';
 import { setSessionCookie, clearSessionCookie, getSession } from '@/lib/auth';
 import { PERMISSIONS, ROLE_HOME, CHANGE_PASSWORD_PATH } from '@/lib/permissions';
 import { createChallengeToken, verifyChallengeToken, CHALLENGE_COOKIE_NAME, CHALLENGE_MAX_AGE_SECONDS, cookieSecure } from '@/lib/session';
-import { twoFactorPlan, startSignInChallenge, verifySignInChallenge } from '@/lib/sign-in';
+import { twoFactorPlan, startSignInChallenge, verifySignInChallenge, signInSubject } from '@/lib/sign-in';
 
 // Only same-site relative paths. `//evil.example` and `/\\evil.example`
 // both start with "/" but browsers treat them as another host — an open
@@ -33,14 +33,35 @@ export async function loginAction(prevState, formData) {
   // Two-step sign-in (2026-09-25): the password was right; if this account
   // needs a code, send one and park the browser on /login/verify holding
   // only a short-lived challenge cookie — no session yet.
-  if (result.kind === 'user') {
-    const account = await loadSignInAccount('user', result.user.id);
-    if (!account.ok) return { error: account.error };
-    if (twoFactorPlan(account.user)) {
-      const started = await startSignInChallenge(account.user, { nextPath: next });
-      if (!started.ok) return { error: started.error };
-      await setChallengeCookie(started.challengeId);
-      redirect('/login/verify');
+  const account = result.kind === 'user' ? await loadSignInAccount('user', result.user.id) : result;
+  if (!account.ok) return { error: account.error };
+  const subject = signInSubject(account);
+  const plan = twoFactorPlan(subject);
+  if (plan && plan.deliverable) {
+    const started = await startSignInChallenge(subject, { nextPath: next });
+    if (!started.ok) return { error: started.error };
+    await setChallengeCookie(started.challengeId);
+    redirect('/login/verify');
+  }
+  if (plan && !plan.deliverable) {
+    // Two-step is on for this account but its email/SMS provider isn't
+    // connected on this (production) server — e.g. the keys were removed
+    // after the fact. Enabling it is blocked in that state, so this only
+    // happens by misconfiguration. Signing in without the code (and
+    // recording that it happened) beats locking the whole office out of
+    // an EVV system; the startup log warns loudly about the missing provider.
+    console.warn(`[sign-in] two-step code skipped for ${subject.kind} ${subject.id}: ${plan.channel} not connected`);
+    if (subject.kind === 'user') {
+      await logAuditEvent(subject.organizationId, {
+        actorUserId: subject.id,
+        actorName: subject.name,
+        actorRole: subject.role,
+        locationId: subject.locationId || null,
+        action: 'two_factor_skipped',
+        entityType: 'user',
+        entityId: subject.id,
+        detail: `${plan.channel} is not connected on the server, so no sign-in code could be sent`,
+      });
     }
   }
 
@@ -63,6 +84,8 @@ async function startSession(result) {
       // db/schema.sql's comment on platform_admins.platform_role.
       platformRole: admin.platformRole,
       caregiverId: null,
+      // Session version: a password reset moves it on and signs this out.
+      sv: admin.sessionVersion,
     });
     return;
   }
@@ -140,7 +163,7 @@ export async function resendCodeAction() {
     await clearChallengeCookie();
     return { error: account.error, restart: true };
   }
-  const started = await startSignInChallenge(account.user, { nextPath: challenge.nextPath });
+  const started = await startSignInChallenge(signInSubject(account), { nextPath: challenge.nextPath });
   if (!started.ok) return { error: started.error };
   await consumeSignInChallenge(challenge.id);
   await setChallengeCookie(started.challengeId);

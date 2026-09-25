@@ -122,6 +122,10 @@ async function run() {
   eq('  ...reply confirms', inb.reply, MATCHED_REPLY);
   const filed = await queryOne(`SELECT * FROM messages WHERE caregiver_id = 'm-cg1' ORDER BY created_at DESC LIMIT 1`);
   check('  ...as source sms, unread by the office', filed.source === 'sms' && filed.mine === true && !filed.read_by_office_at && filed.body === 'Stuck in traffic');
+  const dup1 = await handleInboundSms({ from: '+15125550101', body: 'Arrived', messageSid: 'SM-dup-1' });
+  const dup2 = await handleInboundSms({ from: '+15125550101', body: 'Arrived', messageSid: 'SM-dup-1' });
+  check('a Twilio retry of the same text is filed once', dup1.filed && !dup2.filed && dup2.duplicate);
+  eq('  ...one row', (await queryOne(`SELECT count(*)::int AS n FROM messages WHERE external_id = 'SM-dup-1'`)).n, 1);
   inb = await handleInboundSms({ from: '(512) 555-0102', body: 'hi' });
   check('number formatting differences still match', inb.filed && inb.caregiverId === 'm-cg2');
   inb = await handleInboundSms({ from: '+15125550000', body: 'who is this' });
