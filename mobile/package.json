@@ -1,0 +1,18 @@
+{
+  "name": "hearth-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Android (and later iOS) app wrapper for the Hearth caregiver app. See mobile/README.md.",
+  "scripts": {
+    "sync": "cap sync android",
+    "open": "cap open android",
+    "apk": "cap sync android && cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2"
+  }
+}

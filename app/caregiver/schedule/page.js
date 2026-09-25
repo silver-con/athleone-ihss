@@ -27,7 +27,9 @@ export default async function CaregiverSchedulePage() {
   return (
     <div>
       <h1 className="font-display font-extrabold text-[19px]">My Schedule</h1>
-      <p className="text-[12.5px] text-[var(--muted)] mt-0.5">Week of Sep 14–20</p>
+      <p className="text-[12.5px] text-[var(--muted)] mt-0.5">
+        {new Date(`${today}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' })} · next 7 days
+      </p>
 
       <div className="mt-4">
         <div className="text-[11px] font-display font-bold uppercase tracking-wide text-[var(--accent)] mb-2">

@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { logoutAction } from '@/actions/auth';
 import { getCaregiver, getOnboardingState, getCaregiverUnreadMessageCount } from '@/lib/queries';
 import CaregiverTabs from './CaregiverTabs';
+import InstallAppBanner from '@/components/caregiver/InstallAppBanner';
 
 function initials(name) {
   return (name || '').split(' ').map((p) => p[0]).slice(0, 2).join('');
@@ -21,10 +22,12 @@ export default async function CaregiverLayout({ children }) {
   const unreadMessages = session?.caregiverId ? await getCaregiverUnreadMessageCount(session.organizationId, session.caregiverId) : 0;
 
   return (
-    <div className="min-h-screen flex items-start justify-center py-8 px-4">
-      <div className="w-full max-w-[430px] bg-[var(--bg)] rounded-[36px] border border-[var(--border)] shadow-[0_20px_50px_-20px_oklch(20%_0.02_80_/_0.35)] overflow-hidden flex flex-col h-[860px]">
+    // On a phone (and in the installed app / APK) this fills the screen; on
+    // a laptop it keeps the phone-frame preview used in demos.
+    <div className="min-h-[100dvh] flex items-start justify-center sm:py-8 sm:px-4">
+      <div className="w-full sm:max-w-[430px] bg-[var(--bg)] sm:rounded-[36px] sm:border border-[var(--border)] sm:shadow-[0_20px_50px_-20px_oklch(20%_0.02_80_/_0.35)] overflow-hidden flex flex-col h-[100dvh] sm:h-[860px]">
         {/* Header */}
-        <div className="shrink-0 bg-[var(--surface)] border-b border-[var(--border)] px-5 pt-5 pb-3.5">
+        <div className="shrink-0 bg-[var(--surface)] border-b border-[var(--border)] px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-3.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-[26px] h-[26px] rounded-lg bg-[var(--accent-strong)] flex items-center justify-center shrink-0">
@@ -35,7 +38,8 @@ export default async function CaregiverLayout({ children }) {
               </div>
               <span className="font-display font-extrabold text-[15px]">Hearth</span>
             </div>
-            <Link href="/" className="text-[11.5px] font-display font-bold text-[var(--muted)]">
+            {/* Demo-only link back to the landing page; hidden on phones. */}
+            <Link href="/" className="hidden sm:inline text-[11.5px] font-display font-bold text-[var(--muted)]">
               Exit app
             </Link>
           </div>
@@ -64,6 +68,8 @@ export default async function CaregiverLayout({ children }) {
             </form>
           </div>
         </div>
+
+        <InstallAppBanner />
 
         {showOnboardingBanner && (
           <Link

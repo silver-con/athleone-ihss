@@ -1,0 +1,81 @@
+# Builds the Hearth Android app (APK) on GitHub's servers — no Android
+# Studio needed. GitHub → Actions → "Android APK" → Run workflow → enter your
+# server address → download the APK from the run's Artifacts.
+# Details: mobile/README.md
+name: Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: 'Hearth server address the app opens (https://…)'
+        required: true
+        default: 'https://app.example.com'
+      app_id:
+        description: 'Android application id'
+        required: false
+        default: 'com.hearthcare.caregiver'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HAS_KEYSTORE: ${{ secrets.HEARTH_KEYSTORE_BASE64 != '' }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Capacitor
+        run: npm install --no-audit --no-fund
+
+      - name: Point the app at the server
+        env:
+          HEARTH_SERVER_URL: ${{ inputs.server_url }}
+          HEARTH_APP_ID: ${{ inputs.app_id }}
+        run: |
+          case "$HEARTH_SERVER_URL" in https://*) ;; *) echo "server_url must start with https://"; exit 1;; esac
+          npx cap sync android
+          cat android/app/src/main/assets/capacitor.config.json
+
+      - name: Build debug APK
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }} --no-daemon
+
+      # Signed release APK, only if the signing secrets are configured
+      # (Settings → Secrets → Actions: HEARTH_KEYSTORE_BASE64,
+      # HEARTH_KEYSTORE_PASSWORD, HEARTH_KEY_ALIAS, HEARTH_KEY_PASSWORD).
+      - name: Build signed release APK
+        if: ${{ env.HAS_KEYSTORE == 'true' }}
+        working-directory: mobile/android
+        env:
+          HEARTH_KEYSTORE_PASSWORD: ${{ secrets.HEARTH_KEYSTORE_PASSWORD }}
+          HEARTH_KEY_ALIAS: ${{ secrets.HEARTH_KEY_ALIAS }}
+          HEARTH_KEY_PASSWORD: ${{ secrets.HEARTH_KEY_PASSWORD }}
+        run: |
+          echo "${{ secrets.HEARTH_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/hearth.keystore"
+          HEARTH_KEYSTORE_FILE="$RUNNER_TEMP/hearth.keystore" ./gradlew assembleRelease bundleRelease -PversionCode=${{ github.run_number }} -PversionName=1.0.${{ github.run_number }} --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hearth-android-${{ github.run_number }}
+          path: |
+            mobile/android/app/build/outputs/apk/debug/*.apk
+            mobile/android/app/build/outputs/apk/release/*.apk
+            mobile/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: warn
