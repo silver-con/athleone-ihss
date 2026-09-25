@@ -12,7 +12,7 @@
 #   ./run-qa.sh
 set -euo pipefail
 
-REPO="${1:-$(pwd)}"
+REPO="$(cd "${1:-$(pwd)}" && pwd)"
 if [[ ! -f "$REPO/db/schema.sql" ]]; then
   echo "error: no db/schema.sql under $REPO — pass the repo path as the first argument." >&2
   exit 1

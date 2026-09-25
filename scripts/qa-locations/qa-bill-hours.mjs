@@ -74,10 +74,14 @@ async function run() {
   eq('  ...and the caller is told to correct it with the payer', r2.billing, { updated: false, status: 'submitted' });
 
   console.log('\n== a new billing line uses the adjusted figure ==');
+  // The clock-in timestamp is pinned to 9:00 AM Central on the service
+  // date. It used to be now() - 2 days, which put the clock-in at whatever
+  // time of day the suite happened to run — after 11:00 AM the 11:00
+  // clock-out below was "before" it and the suite failed.
   await query(
     `INSERT INTO visits (id, organization_id, caregiver_id, client_id, service_date, start_time, end_time, status, evv_clock_in, evv_clock_in_at)
-     VALUES ('b2',$1,'cg-bh','c-bh',$2,'9:00 AM','1:00 PM','in-progress','9:00 AM', now() - interval '2 days')`,
-    [ORG, date]
+     VALUES ('b2',$1,'cg-bh','c-bh',$2,'9:00 AM','1:00 PM','in-progress','9:00 AM', ($3::date + time '09:00') AT TIME ZONE 'America/Chicago')`,
+    [ORG, date, date]
   );
   await db.performVisitMaintenance(ORG, 'b2', { ...base, reasonCodes: ['210A', '110B'], manualClockOut: '11:00', billHours: '2' }, actor);
   eq('entering the missing clock-out + 110 B in one go completes the visit', (await db.getVisit(ORG, 'b2')).status, 'completed');
