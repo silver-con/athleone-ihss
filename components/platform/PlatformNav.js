@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 const TABS = [
   { href: '/platform', label: 'Overview' },
   { href: '/platform/admins', label: 'Team' },
+  { href: '/platform/communications', label: 'Email & SMS' },
 ];
 
 // Lightweight two-tab nav for the /platform area now that it has grown

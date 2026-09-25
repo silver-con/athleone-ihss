@@ -101,6 +101,13 @@ CREATE TABLE IF NOT EXISTS organizations (
   -- visits) is recorded — Vesta's failed-to-export rule uses 100 ft.
   -- Added 2026-09-24.
   overlap_distance_feet         integer NOT NULL DEFAULT 100 CHECK (overlap_distance_feet >= 25 AND overlap_distance_feet <= 1000),
+  -- Communications settings, added 2026-09-25 (db/migrations/
+  -- 2026-09-25-01-communications.sql). notify_email: the office inbox that
+  -- gets an email when a caregiver sends a message (NULL = nobody is
+  -- emailed; the message still appears on /admin/messages).
+  -- caregiver_notify_channel: how a caregiver is told the office replied.
+  notify_email                  text,
+  caregiver_notify_channel      text NOT NULL DEFAULT 'sms' CHECK (caregiver_notify_channel IN ('sms', 'email', 'both', 'none')),
   created_at                    timestamptz NOT NULL DEFAULT now()
 );
 
@@ -839,6 +846,36 @@ CREATE INDEX IF NOT EXISTS idx_cg_checks_caregiver ON caregiver_checks(caregiver
 CREATE INDEX IF NOT EXISTS idx_courses_org ON training_courses(organization_id);
 CREATE INDEX IF NOT EXISTS idx_completions_org ON training_completions(organization_id);
 CREATE INDEX IF NOT EXISTS idx_completions_caregiver ON training_completions(caregiver_id);
+
+-- OUTBOX — every email and text message Hearth sends (or, with no provider
+-- connected, would have sent). Added 2026-09-25; written only through
+-- lib/comms/index.js. organization_id is NULL for platform-level mail (a
+-- platform admin's own sign-in code). body is NULL for "sensitive"
+-- templates — password-reset links and sign-in codes are secrets, and an
+-- agency admin reading the outbox must not be able to use a colleague's
+-- reset link. Templates never carry client PHI (lib/comms/templates.js).
+-- status: logged (no provider — not delivered), sending, sent (provider
+-- accepted it), delivered / undelivered / failed (Twilio delivery receipt
+-- or provider error).
+CREATE TABLE IF NOT EXISTS notifications (
+  id                  text PRIMARY KEY,
+  organization_id     text REFERENCES organizations(id) ON DELETE CASCADE,
+  channel             text NOT NULL CHECK (channel IN ('email', 'sms')),
+  recipient           text NOT NULL,
+  template            text NOT NULL,
+  subject             text,
+  body                text,
+  provider            text NOT NULL,
+  status              text NOT NULL CHECK (status IN ('logged', 'sending', 'sent', 'delivered', 'undelivered', 'failed')),
+  provider_message_id text,
+  error               text,
+  user_id             text,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_org_created ON notifications(organization_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_provider_msg ON notifications(provider_message_id);
 
 -- NOTE ON MIGRATING AN EXISTING DEV DATABASE:
 -- CREATE TABLE IF NOT EXISTS is a no-op against a database that already has

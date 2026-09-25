@@ -91,6 +91,25 @@ psql -q -d "$DB_NAME" -c "TRUNCATE organizations CASCADE;" 2>/dev/null
 psql -q -d "$DB_NAME" -c "TRUNCATE organizations CASCADE;" 2>/dev/null
 (cd "$WORK" && node qa-evv-sender.mjs) || STATUS=1
 
+# 4b. 2026-09-25 suites (communications, password reset / two-step sign-in,
+#     office messages, webhooks). The email/SMS layer lives in lib/comms/;
+#     copy it alongside and point its '@/lib/...' imports at the copies.
+mkdir -p "$WORK/comms"
+cp "$REPO"/lib/comms/*.js "$WORK/comms/"
+sed -i.bak -e "s|from '@/lib/comms/\([a-z0-9-]*\)'|from './\1.js'|" -e "s|from '@/lib/queries'|from '../queries.js'|" "$WORK"/comms/*.js && rm -f "$WORK"/comms/*.bak
+for extra in sign-in.js messaging.js docusign-connect.js; do
+  if [[ -f "$REPO/lib/$extra" ]]; then
+    cp "$REPO/lib/$extra" "$WORK/"
+    sed -i.bak -e "s|from '@/lib/comms'|from './comms/index.js'|" -e "s|from '@/lib/comms/\([a-z0-9-]*\)'|from './comms/\1.js'|" -e "s|from '@/lib/queries'|from './queries.js'|" -e "s|from '@/lib/passwords'|from './passwords.js'|" "$WORK/$extra" && rm -f "$WORK/$extra.bak"
+  fi
+done
+for suite in "$QA_DIR"/qa-2026-09-25-*.mjs; do
+  [[ -f "$suite" ]] || continue
+  cp "$suite" "$WORK/"
+  psql -q -d "$DB_NAME" -c "TRUNCATE organizations CASCADE; TRUNCATE notifications;" 2>/dev/null
+  (cd "$WORK" && node "$(basename "$suite")") || STATUS=1
+done
+
 # 5. Clean up the scratch database.
 dropdb --if-exists "$DB_NAME"
 echo "==> dropped $DB_NAME"
