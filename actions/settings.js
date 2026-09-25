@@ -44,3 +44,30 @@ export async function updateEvvSettingsAction(prevState, formData) {
   revalidatePath('/admin/settings');
   return { error: null, success: 'Settings saved.' };
 }
+
+// /admin/settings "Sign-in security" — require two-step sign-in for every
+// office account in this agency.
+export async function updateSignInSecurityAction(prevState, formData) {
+  const session = await requirePermission('admin.settings.manage');
+  const required = formData.get('requireTwoFactor') === 'on';
+  const before = await db.getOrganization(session.organizationId);
+  if (Boolean(before.requireTwoFactor) === required) return { error: null, success: 'No changes.' };
+  await db.updateOrganizationRequireTwoFactor(session.organizationId, required);
+  await db.logAuditEvent(session.organizationId, {
+    actorUserId: session.userId,
+    actorName: session.name,
+    actorRole: session.role,
+    locationId: session.locationId,
+    action: 'update_agency_settings',
+    entityType: 'organization',
+    entityId: session.organizationId,
+    detail: `two-step sign-in for office accounts ${required ? 'required' : 'optional'}`,
+  });
+  revalidatePath('/admin/settings');
+  return {
+    error: null,
+    success: required
+      ? 'Required. Office staff will get a code by email at their next sign-in (or by text, if they chose that).'
+      : 'Two-step sign-in is now optional for office staff.',
+  };
+}

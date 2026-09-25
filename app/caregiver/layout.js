@@ -47,6 +47,12 @@ export default async function CaregiverLayout({ children }) {
               <div className="font-display font-extrabold text-[15.5px] truncate">{me?.name}</div>
               <div className="text-[11.5px] text-[var(--muted)]">{me?.role}</div>
             </div>
+            <Link
+              href="/account/security"
+              className="text-[11px] font-display font-bold text-[var(--muted)] border border-[var(--border)] rounded-[8px] px-2 py-1.5 shrink-0"
+            >
+              Account
+            </Link>
             <form action={logoutAction}>
               <button
                 type="submit"

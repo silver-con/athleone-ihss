@@ -4,6 +4,7 @@ import LoginForm from './LoginForm';
 export default async function LoginPage({ searchParams }) {
   const params = await searchParams;
   const next = typeof params?.next === 'string' ? params.next : '';
+  const justReset = params?.reset === '1';
 
   return (
     <div className="min-h-screen flex items-center justify-center px-6 py-12">
@@ -23,7 +24,17 @@ export default async function LoginPage({ searchParams }) {
           <p className="text-[13px] text-[var(--muted)] mb-6">
             Sign in with the account your agency set up for you.
           </p>
+          {justReset && (
+            <div className="text-[13px] font-display font-medium text-[var(--success)] bg-[var(--success-soft)] rounded-xl px-3.5 py-2.5 mb-4">
+              Password changed. Sign in with your new password.
+            </div>
+          )}
           <LoginForm next={next} />
+          <p className="text-center mt-4">
+            <Link href="/forgot-password" className="text-[12.5px] font-display font-bold text-[var(--accent)]">
+              Forgot your password?
+            </Link>
+          </p>
         </div>
 
         <p className="text-center text-[12px] text-[var(--muted)] mt-5">

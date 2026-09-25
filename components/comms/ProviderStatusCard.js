@@ -17,7 +17,7 @@ export default function ProviderStatusCard({ kind, status }) {
     ? { bg: 'oklch(95% 0.05 150)', border: 'oklch(85% 0.07 150)', fg: 'oklch(40% 0.1 150)', label: 'Connected' }
     : status.provider !== 'log' || status.unknownProvider
       ? { bg: 'oklch(95% 0.04 30)', border: 'oklch(85% 0.07 30)', fg: 'oklch(45% 0.14 30)', label: 'Incomplete setup' }
-      : { bg: 'oklch(95% 0.05 85)', border: 'oklch(86% 0.06 85)', fg: 'oklch(42% 0.1 75)', label: 'Not connected — recording only' };
+      : { bg: 'oklch(95% 0.05 85)', border: 'oklch(86% 0.06 85)', fg: 'oklch(42% 0.1 75)', label: 'Not connected' };
 
   return (
     <section className="flex-1 min-w-[300px] bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5">

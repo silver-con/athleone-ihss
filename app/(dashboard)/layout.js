@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import { getSession } from "@/lib/auth";
 import { logoutAction } from "@/actions/auth";
@@ -14,6 +15,9 @@ export default async function DashboardLayout({ children }) {
             <span className="text-[12.5px] text-[var(--muted)]">
               Signed in as <strong className="text-[oklch(30%_0.02_80)]">{session.name}</strong>
             </span>
+            <Link href="/account/security" className="text-[12.5px] font-display font-bold text-[var(--muted)]">
+              Account
+            </Link>
             <form action={logoutAction}>
               <button
                 type="submit"

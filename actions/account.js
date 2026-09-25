@@ -1,8 +1,11 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { getSession, hashPassword, setSessionCookie } from '@/lib/auth';
-import { changeOwnPassword, logAuditEvent } from '@/lib/queries';
+import { requirePermission } from '@/actions/auth';
+import { changeOwnPassword, logAuditEvent, getTwoFactorSettings, updateTwoFactorSettings, verifyOwnPassword } from '@/lib/queries';
+import { toE164 } from '@/lib/comms/phone';
 import { passwordProblem } from '@/lib/passwords';
 import { PERMISSIONS, ROLE_HOME } from '@/lib/permissions';
 
@@ -63,4 +66,47 @@ export async function changePasswordAction(prevState, formData) {
     mustChangePassword: false,
   });
   redirect(ROLE_HOME[session.role] || '/');
+}
+
+// /account/security — the signed-in person's own two-step sign-in setting.
+// Needs their current password: otherwise anyone who found an unlocked,
+// signed-in screen could quietly switch the codes to their own phone.
+export async function saveTwoFactorAction(prevState, formData) {
+  const session = await requirePermission('shared.account.security.manage');
+  const method = String(formData.get('method') || 'off');
+  const rawPhone = String(formData.get('mobilePhone') || '').trim();
+  const password = String(formData.get('currentPassword') || '');
+
+  const current = await getTwoFactorSettings(session.organizationId, session.userId);
+  if (!current) redirect('/login');
+  if (!['off', 'email', 'sms'].includes(method)) return { error: 'Pick how you want to get sign-in codes.' };
+  const officeRole = ['ADMIN', 'LOCATION_ADMIN', 'COORDINATOR'].includes(session.role);
+  if (method === 'off' && current.organizationRequiresTwoFactor && officeRole) {
+    return { error: 'Your agency requires two-step sign-in for office accounts, so it can’t be turned off.' };
+  }
+  let mobilePhone = null;
+  if (rawPhone) {
+    mobilePhone = toE164(rawPhone);
+    if (!mobilePhone) return { error: 'Enter a mobile number like (512) 555-0147.' };
+  }
+  if (method === 'sms' && !mobilePhone && !toE164(current.caregiverPhone)) {
+    return { error: 'Enter the mobile number the codes should go to.' };
+  }
+  if (!(await verifyOwnPassword(session.organizationId, session.userId, password))) {
+    return { error: 'Your current password is incorrect.' };
+  }
+
+  await updateTwoFactorSettings(session.organizationId, session.userId, { method, mobilePhone });
+  await logAuditEvent(session.organizationId, {
+    actorUserId: session.userId,
+    actorName: session.name,
+    actorRole: session.role,
+    locationId: session.locationId,
+    action: 'two_factor_changed',
+    entityType: 'user',
+    entityId: session.userId,
+    detail: `two-step sign-in: ${current.method} -> ${method}`,
+  });
+  revalidatePath('/account/security');
+  return { success: method === 'off' ? 'Two-step sign-in is off.' : `Saved. Next time you sign in we’ll ${method === 'sms' ? 'text' : 'email'} you a code.` };
 }

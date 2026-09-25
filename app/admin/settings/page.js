@@ -3,6 +3,8 @@ import { getSession } from '@/lib/auth';
 import { getOrganization } from '@/lib/queries';
 import { getComplianceProfile } from '@/lib/state-compliance';
 import EvvSettingsForm from '@/components/admin/EvvSettingsForm';
+import SignInSecurityForm from '@/components/admin/SignInSecurityForm';
+import { emailConfig } from '@/lib/comms/config';
 
 // Agency settings — the per-agency "configurator" (see the project doc
 // vesta-evv-feature-reference.md). ADMIN only. More settings join this
@@ -30,6 +32,7 @@ export default async function AdminSettingsPage() {
         stateDays={profile?.visitMaintenanceWindowDays ?? null}
         stateName={profile?.stateName || organization?.state || 'Your state'}
       />
+      <SignInSecurityForm requireTwoFactor={Boolean(organization?.requireTwoFactor)} emailLive={emailConfig().live} />
     </div>
   );
 }

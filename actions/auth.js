@@ -1,9 +1,12 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { authenticateLogin } from '@/lib/queries';
+import { cookies } from 'next/headers';
+import { authenticateLogin, loadSignInAccount, getSignInChallenge, consumeSignInChallenge } from '@/lib/queries';
 import { setSessionCookie, clearSessionCookie, getSession } from '@/lib/auth';
 import { PERMISSIONS, ROLE_HOME, CHANGE_PASSWORD_PATH } from '@/lib/permissions';
+import { createChallengeToken, verifyChallengeToken, CHALLENGE_COOKIE_NAME, CHALLENGE_MAX_AGE_SECONDS } from '@/lib/session';
+import { twoFactorPlan, startSignInChallenge, verifySignInChallenge } from '@/lib/sign-in';
 
 // Only same-site relative paths. `//evil.example` and `/\\evil.example`
 // both start with "/" but browsers treat them as another host — an open
@@ -27,6 +30,27 @@ export async function loginAction(prevState, formData) {
   const result = await authenticateLogin(email, password);
   if (!result.ok) return { error: result.error };
 
+  // Two-step sign-in (2026-09-25): the password was right; if this account
+  // needs a code, send one and park the browser on /login/verify holding
+  // only a short-lived challenge cookie — no session yet.
+  if (result.kind === 'user') {
+    const account = await loadSignInAccount('user', result.user.id);
+    if (!account.ok) return { error: account.error };
+    if (twoFactorPlan(account.user)) {
+      const started = await startSignInChallenge(account.user, { nextPath: next });
+      if (!started.ok) return { error: started.error };
+      await setChallengeCookie(started.challengeId);
+      redirect('/login/verify');
+    }
+  }
+
+  await startSession(result);
+  redirect(landingFor(result, next));
+}
+
+// Session cookie contents for a successful sign-in — shared by the
+// password-only path above and the two-step path in verifyCodeAction.
+async function startSession(result) {
   if (result.kind === 'platform') {
     const admin = result.admin;
     await setSessionCookie({
@@ -40,9 +64,8 @@ export async function loginAction(prevState, formData) {
       platformRole: admin.platformRole,
       caregiverId: null,
     });
-    redirect(next || ROLE_HOME.PLATFORM_ADMIN);
+    return;
   }
-
   const user = result.user;
   await setSessionCookie({
     userId: user.id,
@@ -61,8 +84,72 @@ export async function loginAction(prevState, formData) {
     // change-password page before anything else.
     mustChangePassword: user.mustChangePassword,
   });
-  if (user.mustChangePassword) redirect(CHANGE_PASSWORD_PATH);
-  redirect(next || ROLE_HOME[user.role] || '/');
+}
+
+function landingFor(result, next) {
+  if (result.kind === 'platform') return next || ROLE_HOME.PLATFORM_ADMIN;
+  if (result.user.mustChangePassword) return CHANGE_PASSWORD_PATH;
+  return next || ROLE_HOME[result.user.role] || '/';
+}
+
+async function setChallengeCookie(challengeId) {
+  const store = await cookies();
+  store.set(CHALLENGE_COOKIE_NAME, await createChallengeToken(challengeId), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: CHALLENGE_MAX_AGE_SECONDS,
+  });
+}
+
+async function readChallengeId() {
+  const store = await cookies();
+  const token = store.get(CHALLENGE_COOKIE_NAME)?.value;
+  return token ? verifyChallengeToken(token) : null;
+}
+
+async function clearChallengeCookie() {
+  (await cookies()).delete(CHALLENGE_COOKIE_NAME);
+}
+
+// /login/verify — the code from the email or text.
+export async function verifyCodeAction(prevState, formData) {
+  const challengeId = await readChallengeId();
+  if (!challengeId) return { error: 'That sign-in has ended. Sign in again.', restart: true };
+  const r = await verifySignInChallenge(challengeId, formData.get('code'));
+  if (!r.ok) {
+    if (r.restart) await clearChallengeCookie();
+    return { error: r.error, restart: Boolean(r.restart) };
+  }
+  await clearChallengeCookie();
+  await startSession(r.account);
+  redirect(landingFor(r.account, safeNext(r.nextPath)));
+}
+
+// "Send a new code" — replaces the pending challenge with a fresh one.
+export async function resendCodeAction() {
+  const challengeId = await readChallengeId();
+  const challenge = challengeId ? await getSignInChallenge(challengeId) : null;
+  if (!challenge || challenge.consumedAt || new Date(challenge.expiresAt) <= new Date()) {
+    await clearChallengeCookie();
+    return { error: 'That sign-in has ended. Sign in again.', restart: true };
+  }
+  const account = await loadSignInAccount(challenge.kind, challenge.accountId);
+  if (!account.ok) {
+    await clearChallengeCookie();
+    return { error: account.error, restart: true };
+  }
+  const started = await startSignInChallenge(account.user, { nextPath: challenge.nextPath });
+  if (!started.ok) return { error: started.error };
+  await consumeSignInChallenge(challenge.id);
+  await setChallengeCookie(started.challengeId);
+  return { info: `A new code is on its way to ${started.masked}.` };
+}
+
+export async function cancelSignInAction() {
+  await clearChallengeCookie();
+  redirect('/login');
 }
 
 export async function logoutAction() {

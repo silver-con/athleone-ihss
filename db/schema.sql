@@ -108,6 +108,11 @@ CREATE TABLE IF NOT EXISTS organizations (
   -- caregiver_notify_channel: how a caregiver is told the office replied.
   notify_email                  text,
   caregiver_notify_channel      text NOT NULL DEFAULT 'sms' CHECK (caregiver_notify_channel IN ('sms', 'email', 'both', 'none')),
+  -- When true, every office account (ADMIN, LOCATION_ADMIN, COORDINATOR)
+  -- must enter a one-time code at sign-in — by email if the person hasn't
+  -- picked text instead. Caregivers can opt in themselves. Added 2026-09-25
+  -- (db/migrations/2026-09-25-02-password-reset-and-two-step.sql).
+  require_two_factor            boolean NOT NULL DEFAULT false,
   created_at                    timestamptz NOT NULL DEFAULT now()
 );
 
@@ -410,7 +415,12 @@ CREATE TABLE IF NOT EXISTS users (
   must_change_password boolean NOT NULL DEFAULT true,
   password_changed_at  timestamptz,
   last_login_at        timestamptz,
-  deactivated_at       timestamptz
+  deactivated_at       timestamptz,
+  -- Two-step sign-in, added 2026-09-25: 'off', or where the one-time code
+  -- goes. mobile_phone is the number for 'sms' (a caregiver falls back to
+  -- their caregivers.phone). See lib/sign-in.js.
+  two_factor_method    text NOT NULL DEFAULT 'off' CHECK (two_factor_method IN ('off', 'email', 'sms')),
+  mobile_phone         text
 );
 
 -- Failed sign-in tracking, keyed by the email typed (not by account), so
@@ -876,6 +886,44 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 CREATE INDEX IF NOT EXISTS idx_notifications_org_created ON notifications(organization_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_provider_msg ON notifications(provider_message_id);
+
+-- PASSWORD RESET — "Forgot password?" links (2026-09-25). Only a SHA-256
+-- hash of the token is stored; the token itself exists only in the email.
+-- Single use (used_at), 60-minute life, and requesting a new link voids
+-- any older unused one. account_kind says which table account_id points
+-- at (users or platform_admins), so it has no FK.
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id              text PRIMARY KEY,
+  token_hash      text NOT NULL UNIQUE,
+  account_kind    text NOT NULL CHECK (account_kind IN ('user', 'platform')),
+  account_id      text NOT NULL,
+  organization_id text REFERENCES organizations(id) ON DELETE CASCADE,
+  expires_at      timestamptz NOT NULL,
+  used_at         timestamptz,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_reset_account ON password_reset_tokens(account_kind, account_id);
+
+-- TWO-STEP SIGN-IN CODES (2026-09-25). One row per code sent. code_hash is
+-- an HMAC of the code (never the code). 10-minute life, 5 guesses, single
+-- use. destination is already masked ("•••-•••-0147") for display.
+CREATE TABLE IF NOT EXISTS sign_in_challenges (
+  id              text PRIMARY KEY,
+  account_kind    text NOT NULL CHECK (account_kind IN ('user', 'platform')),
+  account_id      text NOT NULL,
+  organization_id text REFERENCES organizations(id) ON DELETE CASCADE,
+  code_hash       text NOT NULL,
+  channel         text NOT NULL CHECK (channel IN ('email', 'sms')),
+  destination     text NOT NULL,
+  attempts        integer NOT NULL DEFAULT 0,
+  next_path       text,
+  expires_at      timestamptz NOT NULL,
+  consumed_at     timestamptz,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sign_in_challenges_account ON sign_in_challenges(account_kind, account_id, created_at DESC);
 
 -- NOTE ON MIGRATING AN EXISTING DEV DATABASE:
 -- CREATE TABLE IF NOT EXISTS is a no-op against a database that already has
