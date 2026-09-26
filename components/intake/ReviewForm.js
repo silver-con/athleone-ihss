@@ -7,9 +7,11 @@ import { validateFields, LOW_CONFIDENCE } from '@/lib/docai/validate';
 
 const GROUPS = [
   ['Client', ['clientName', 'dob', 'medicaidId', 'phone', 'address']],
-  ['Payer & authorization', ['payer', 'authNumber', 'service', 'serviceCode', 'authHours', 'authStart', 'authEnd']],
-  ['Clinical', ['diagnosis']],
+  ['Payer & authorization', ['payer', 'authStatus', 'authNumber', 'caseId', 'service', 'serviceCode', 'modifier', 'authHours', 'unitsPerWeek', 'totalUnits', 'authStart', 'authEnd', 'reviewDate']],
+  ['Clinical & care plan', ['diagnosis', 'diagnosisCode', 'approvedTasks', 'pcpName', 'pcpPhone']],
+  ['Payer service coordinator', ['coordinatorName', 'coordinatorPhone', 'coordinatorEmail']],
 ];
+const WIDE = new Set(['diagnosis', 'address', 'approvedTasks', 'service']);
 
 function ConfidenceDot({ field }) {
   if (!field?.value) return <span className="text-[10.5px] text-[var(--muted)]">not found</span>;
@@ -66,7 +68,7 @@ export default function ReviewForm({ documentId, initialFields, duplicates, read
                 const hasError = list.some((i) => i.level === 'error');
                 const hasWarn = list.some((i) => i.level === 'warn');
                 return (
-                  <label key={key} className={'flex flex-col gap-1 ' + (key === 'diagnosis' || key === 'address' ? 'sm:col-span-2' : '')}>
+                  <label key={key} className={'flex flex-col gap-1 ' + (WIDE.has(key) ? 'sm:col-span-2' : '')}>
                     <span className="flex items-center justify-between gap-2">
                       <span className="text-[11.5px] font-display font-bold text-[var(--muted)]">
                         {def.label}
@@ -74,16 +76,16 @@ export default function ReviewForm({ documentId, initialFields, duplicates, read
                       </span>
                       <ConfidenceDot field={fields[key]} />
                     </span>
-                    <input
-                      name={key}
-                      value={fields[key]?.value || ''}
-                      onChange={(e) => set(key, e.target.value)}
-                      readOnly={readOnly}
-                      className={
+                    {(() => {
+                      const cls =
                         'border rounded-lg px-3 py-2 text-[13px] bg-white ' +
-                        (hasError ? 'border-[var(--danger)]' : hasWarn ? 'border-[oklch(75%_0.12_75)] bg-[oklch(98%_0.03_85)]' : 'border-[var(--border)]')
-                      }
-                    />
+                        (hasError ? 'border-[var(--danger)]' : hasWarn ? 'border-[oklch(75%_0.12_75)] bg-[oklch(98%_0.03_85)]' : 'border-[var(--border)]');
+                      return key === 'approvedTasks' ? (
+                        <textarea name={key} rows={3} value={fields[key]?.value || ''} onChange={(e) => set(key, e.target.value)} readOnly={readOnly} className={cls} />
+                      ) : (
+                        <input name={key} value={fields[key]?.value || ''} onChange={(e) => set(key, e.target.value)} readOnly={readOnly} className={cls} />
+                      );
+                    })()}
                     {list.map((i, n) => (
                       <span key={n} className="text-[11.5px]" style={{ color: i.level === 'error' ? 'var(--danger)' : 'oklch(45% 0.1 75)' }}>
                         {i.message}

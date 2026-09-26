@@ -7,9 +7,14 @@ import { submitIntakeAction } from '@/actions/referrals';
 const initialState = { error: null };
 
 // "4127 Pecan Hollow Dr, San Antonio, TX 78223" -> parts, for prefilling.
+const STREET_END = '(?:DR|DRIVE|ST|STREET|AVE|AVENUE|RD|ROAD|LN|LANE|BLVD|CT|COURT|WAY|PKWY|TRL|TRAIL|CIR|CIRCLE|HWY|PL|PLACE|LOOP|PATH|TER|XING)\\.?(?:\\s+(?:APT|UNIT|STE|#)\\s*[\\w-]+)?';
 function splitAddress(a) {
-  const m = /^(.*?),\s*([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/.exec(String(a || '').trim());
-  return m ? { street: m[1], city: m[2], state: m[3], zip: m[4] } : { street: a || '' };
+  const s = String(a || '').trim();
+  const m = /^(.*?),\s*([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/.exec(s);
+  if (m) return { street: m[1], city: m[2], state: m[3], zip: m[4] };
+  // No commas, as payer systems often print it: "1306 EBONY DR MCKINNEY TX 75071"
+  const n = new RegExp(`^(.*?\\b${STREET_END})\\s+([A-Za-z .'-]+?)\\s+([A-Z]{2})\\s+(\\d{5}(?:-\\d{4})?)$`, 'i').exec(s);
+  return n ? { street: n[1], city: n[2], state: n[3].toUpperCase(), zip: n[4] } : { street: s };
 }
 
 export default function IntakeForm({ referral, careNeedOptions, locations = [] }) {
@@ -93,8 +98,8 @@ export default function IntakeForm({ referral, careNeedOptions, locations = [] }
 
       <Section title="Physician Information">
         <Grid cols={2}>
-          <Field label="Physician Name" name="physicianName" />
-          <Field label="Phone" name="physicianPhone" placeholder="(   ) ___-____" />
+          <Field label="Physician Name" name="physicianName" defaultValue={fax.pcp?.name || ''} />
+          <Field label="Phone" name="physicianPhone" placeholder="(   ) ___-____" defaultValue={fax.pcp?.phone || ''} />
         </Grid>
       </Section>
 

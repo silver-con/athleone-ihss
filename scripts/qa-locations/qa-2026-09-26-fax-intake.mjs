@@ -352,6 +352,52 @@ async function run() {
     eq('member DOB label', mf.dob?.value, '03/03/1941');
   }
 
+  console.log('\n== Full authorization detail -> care plan at intake (fictional values) ==');
+  {
+    const { authorizationFromFax, splitTasks, authStatusFromFax } = await import('./fax-authorization.js');
+    const page = [
+      'Authorization Notification', 'Auth Status: Approved', 'Review Date: 09/12/2026',
+      'Case ID', 'LTSS-00000001', 'Modifier Code1', 'U5', 'Total Units Per Week', '116', 'Total Units', '6544',
+      'Diagnosis code', 'I10', 'Service Coordinator', 'Pat Sample', 'Service Coordinator Phone', '(972) 555-0142',
+      'Service Coordinator Email', 'pat.sample@example.com',
+      'Purchased Tasks: BATHING, Dressing, Exercise, Grooming (Shaving, Oral care, Nail Care),',
+      'Toileting, Transfer, Walking, Meal Prep (breakfast, lunch), Shopping',
+    ].join('\n');
+    const pf = normalizeFields(fieldsFromText(page, { confidence: 0.7 }));
+    eq('status, case ID, modifier, units and review date are read', [pf.authStatus?.value, pf.caseId?.value, pf.modifier?.value, pf.unitsPerWeek?.value, pf.totalUnits?.value, pf.reviewDate?.value], ['Approved', 'LTSS-00000001', 'U5', '116', '6544', '09/12/2026']);
+    eq('diagnosis code and coordinator are read', [pf.diagnosisCode?.value, pf.coordinatorName?.value, pf.coordinatorPhone?.value, pf.coordinatorEmail?.value], ['I10', 'Pat Sample', '(972) 555-0142', 'pat.sample@example.com']);
+    check('a task list that wraps onto the next line is read whole', /Grooming \(Shaving, Oral care, Nail Care\), Toileting, Transfer, Walking, Meal Prep \(breakfast, lunch\), Shopping$/.test(pf.approvedTasks?.value || ''), pf.approvedTasks?.value);
+    eq('tasks split on commas, not inside brackets', splitTasks('BATHING, Dressing, Grooming (Shaving, Oral care), Toileting'), ['Bathing', 'Dressing', 'Grooming (Shaving, Oral care)', 'Toileting']);
+    eq('fax status -> care plan status', ['Approved', 'Pended', 'Denied', ''].map(authStatusFromFax), ['approved', 'pending', 'denied', 'pending']);
+
+    const vf = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { value: v, confidence: 1 }]));
+    const base = { clientName: 'A B', dob: '01/01/1950', payer: 'Molina', authNumber: 'X1', service: 'PAS', authHours: '29 hrs/wk', diagnosis: 'HTN', authStart: '09/01/2026', authEnd: '09/30/2027' };
+    const denied = validateFields(vf({ ...base, authStatus: 'Denied' }), { checkConfidence: false, today: new Date('2026-09-26') });
+    check('a denied authorization blocks approval', (denied.authStatus || []).some((i) => i.level === 'error'));
+    const mismatch = validateFields(vf({ ...base, unitsPerWeek: '100' }), { checkConfidence: false, today: new Date('2026-09-26') });
+    check('units that don\'t match the hours are flagged', (mismatch.unitsPerWeek || []).some((i) => i.level === 'warn'));
+    const totals = validateFields(vf({ ...base, unitsPerWeek: '116', totalUnits: '2555' }), { checkConfidence: false, today: new Date('2026-09-26') });
+    check('a total that doesn\'t match units x weeks is flagged', (totals.totalUnits || []).some((i) => i.level === 'warn' && /6,5\d\d/.test(i.message)), JSON.stringify(totals.totalUnits));
+    const okTotals = validateFields(vf({ ...base, unitsPerWeek: '116', totalUnits: '6544' }), { checkConfidence: false, today: new Date('2026-09-26') });
+    check('  ...and a matching total is not', !okTotals.totalUnits && !okTotals.unitsPerWeek);
+
+    const auth = authorizationFromFax({ payer: 'Molina Healthcare', service: 'Non-Waiver PAS Agency Model', authHours: '29 hrs/wk', authNumber: 'PUM000000001', diagnosis: 'ESSENTIAL PRIMARY HYPERTENSION',
+      fax: { serviceCode: 'S5125', modifier: 'U5', authStart: '09/01/2026', authEnd: '09/30/2027', authStatus: 'Approved', caseId: 'LTSS-00000001', unitsPerWeek: '116', totalUnits: '6544', diagnosisCode: 'I10', approvedTasks: 'BATHING, Dressing, Grooming (Shaving, Oral care)', coordinator: { name: 'Pat Sample' } } }, 'c-1');
+    eq('the care plan built from the fax', [auth.serviceCode, auth.modifierCodes, auth.totalHoursPerWeek, auth.totalUnitsPerWeek, auth.startDate, auth.endDate, auth.status, auth.diagnosisCode, auth.caseId, auth.referenceNumber, auth.purchasedTasks.length],
+      ['S5125', 'U5', 29, 116, '2026-09-01', '2027-09-30', 'approved', 'I10', 'LTSS-00000001', 'PUM000000001', 3]);
+    eq('no service code or dates -> no care plan (office adds it by hand)', authorizationFromFax({ fax: { serviceCode: 'S5125' } }, 'c'), null);
+
+    // End to end: an approved fax's referral completes intake -> the care plan exists.
+    const rid = 'ref-fax-careplan';
+    await query(`INSERT INTO referrals (id, organization_id, payer, client_name, dob, service, auth_hours, auth_number, diagnosis, received_date, status, fax)
+                 VALUES ($1,$2,'Molina Healthcare','Pat Q Example','01/01/1950','Non-Waiver PAS Agency Model','29 hrs/wk','PUM000000009','ESSENTIAL PRIMARY HYPERTENSION','09/26/2026','new',$3)`,
+      [rid, ORG, JSON.stringify({ serviceCode: 'S5125 U5', authStart: '09/01/2026', authEnd: '09/30/2027', authStatus: 'Approved', unitsPerWeek: '116', diagnosisCode: 'I10', approvedTasks: 'Bathing, Dressing', caseId: 'LTSS-00000009' })]);
+    const res = await db.submitIntake(ORG, rid, { clientName: 'Pat Q Example', dob: '01/01/1950', memberId: '900000009', address: '1 Main St', city: 'Dallas', state: 'TX', zip: '75201', careNeeds: [] });
+    check('intake reports the care plan it created', Boolean(res.authorizationId) && res.authorizationStatus === 'approved');
+    const sa = await queryOne('SELECT * FROM service_authorizations WHERE organization_id = $1 AND id = $2', [ORG, res.authorizationId]);
+    eq('  ...stored for the new client', [sa?.client_id, sa?.service_code, sa?.modifier_codes, Number(sa?.total_units_per_week), sa?.start_date, sa?.status, sa?.purchased_tasks], [res.clientId, 'S5125', 'U5', 116, '2026-09-01', 'approved', ['Bathing', 'Dressing']]);
+  }
+
   console.log('\n== Hardening (after review) ==');
   // Two deliveries of the same fax at the same moment -> one row.
   const raceBuf = Buffer.concat([sample('molina-authorization-rosa-delgado.pdf'), Buffer.from('\n%race-test\n')]);

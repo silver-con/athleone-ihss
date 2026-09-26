@@ -69,7 +69,7 @@ export async function approveDocumentAction(documentId, prevState, formData) {
   const fields = {};
   const asFields = {};
   for (const f of FIELDS) {
-    const v = String(formData.get(f.key) || '').trim().slice(0, f.key === 'diagnosis' || f.key === 'address' ? 300 : 120);
+    const v = String(formData.get(f.key) || '').trim().slice(0, f.key === 'approvedTasks' ? 1000 : f.key === 'diagnosis' || f.key === 'address' || f.key === 'service' ? 300 : 120);
     fields[f.key] = v;
     asFields[f.key] = { value: v, confidence: 1, source: 'reviewer' };
   }

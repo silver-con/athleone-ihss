@@ -56,7 +56,24 @@ export async function submitIntakeAction(prevState, formData) {
     return { error: err.message || 'Could not submit intake.' };
   }
 
+  if (result.authorizationId) {
+    await db.logAuditEvent(session.organizationId, {
+      actorUserId: session.userId,
+      actorName: session.name,
+      actorRole: session.role,
+      locationId: session.locationId,
+      action: 'create_service_authorization',
+      entityType: 'service_authorization',
+      entityId: result.authorizationId,
+      detail: `created from the approved fax at intake (status ${result.authorizationStatus}) for client ${result.clientId}`,
+    });
+  }
+
   revalidatePath('/referrals');
   revalidatePath('/clients');
-  redirect(`/clients?toast=${encodeURIComponent(`Intake completed for ${result.clientName} — client added to your caseload.`)}`);
+  revalidatePath('/admin/finance');
+  const carePlan = result.authorizationId
+    ? ` Care plan created from the fax${result.authorizationStatus === 'approved' ? '' : ` (${result.authorizationStatus} — confirm it)`}.`
+    : '';
+  redirect(`/clients?toast=${encodeURIComponent(`Intake completed for ${result.clientName} — client added to your caseload.${carePlan}`)}`);
 }

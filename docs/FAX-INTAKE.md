@@ -48,7 +48,7 @@ Medicaid ID, address, phone and authorization dates from the fax.
 In Google Cloud Console → **Document AI** → **Create processor**, choose
 **Custom Extractor**, region **US**, and name it `athleone-referral-extractor`.
 
-Add these fields to its schema, all **optional**, **once** per document. Use
+Add these fields to its schema, all **optional**, **once** per document (the CSV `docs/docai-schema-fields.csv` has them all, with descriptions). Use
 exactly these names; Athleone maps them automatically:
 
 | Field name | Type | Description to give it (helps the AI) |
@@ -66,6 +66,29 @@ exactly these names; Athleone maps them automatically:
 | `diagnosis` | Plain text | Diagnosis or reason for services |
 | `client_address` | Plain text | The member's home address |
 | `client_phone` | Plain text | The member's phone number |
+| `auth_status` | Plain text | Authorization status: Approved, Pended, Denied |
+| `case_id` | Plain text | Payer case ID, e.g. LTSS-######## |
+| `modifier` | Plain text | Service code modifier, e.g. U5 |
+| `units_per_week` | Number | Authorized 15-minute units per week |
+| `total_units` | Number | Total units for the whole authorization period |
+| `review_date` | Datetime | Date the payer reviewed or decided the authorization |
+| `diagnosis_code` | Plain text | ICD-10 diagnosis code, e.g. I10 |
+| `approved_tasks` | Plain text | Approved / purchased tasks list |
+| `service_coordinator_name` | Plain text | The payer's service coordinator |
+| `service_coordinator_phone` | Plain text | Service coordinator phone |
+| `service_coordinator_email` | Plain text | Service coordinator email |
+| `pcp_name` | Plain text | Primary care physician |
+| `pcp_phone` | Plain text | Primary care physician phone |
+
+All 26 fields are also in `docs/docai-schema-fields.csv`. The first 13 fill
+in the referral. The rest fill in the client's **care plan** automatically
+when intake is completed: service code and modifier, hours and units per
+week, dates, status, diagnosis code and approved tasks. The coordinator and
+PCP details go in the care plan's notes and the intake form. The review
+screen warns when:
+- units per week don't match the hours;
+- the total units don't match units × weeks;
+- the payer denied the authorization. This blocks approval.
 
 Then use the processor's **test** screen on a few real faxes (the sample
 faxes work too), and **deploy/set a default version** if the console asks.
