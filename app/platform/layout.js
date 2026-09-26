@@ -25,7 +25,7 @@ export default async function PlatformLayout({ children }) {
                 <path d="M5.5 10v9.5a1 1 0 0 0 1 1H17.5a1 1 0 0 0 1-1V10" />
               </svg>
             </div>
-            <div className="font-display font-extrabold text-[17px]">Hearth</div>
+            <div className="font-display font-extrabold text-[17px]">Athleone</div>
             <div className="text-[11px] font-display font-bold uppercase tracking-wide text-[var(--muted)] bg-[oklch(96%_0.006_85)] rounded-full px-2.5 py-1 ml-1">
               Platform
             </div>

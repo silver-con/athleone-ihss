@@ -19,7 +19,7 @@ export default async function AdminSettingsPage() {
     <div className="max-w-[820px]">
       <h1 className="font-display font-extrabold text-[24px]">Settings</h1>
       <p className="text-[13.5px] text-[var(--muted)] mt-1 mb-6">
-        How Hearth applies EVV rules for {organization?.name || 'your agency'}. Every change is recorded in the audit log.
+        How Athleone applies EVV rules for {organization?.name || 'your agency'}. Every change is recorded in the audit log.
       </p>
       <EvvSettingsForm
         organization={{

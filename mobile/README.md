@@ -1,14 +1,14 @@
-# Hearth caregiver app: Android APK (and the no-APK option)
+# Athleone caregiver app: Android APK (and the no-APK option)
 
-Caregivers can get Hearth on their phone in two ways.
+Caregivers can get Athleone on their phone in two ways.
 
 ## 1. Install from the website (no APK, works today)
 
-Once Hearth is on your server (see `deploy/DEPLOY-DIGITALOCEAN.md`), a
+Once Athleone is on your server (see `deploy/DEPLOY-DIGITALOCEAN.md`), a
 caregiver opens `https://<your address>` on their phone and signs in.
 
-- **Android (Chrome):** a green "Add Hearth to your home screen" bar appears
-  with an **Install** button. Tap it and Hearth gets its own icon. It opens
+- **Android (Chrome):** a green "Add Athleone to your home screen" bar appears
+  with an **Install** button. Tap it and Athleone gets its own icon. It opens
   full screen, like an app.
 - **iPhone (Safari):** tap **Share → Add to Home Screen**. The bar shows this
   tip.
@@ -19,7 +19,7 @@ same as in an app.
 
 ## 2. The Android app (APK)
 
-The APK is a thin native shell around your live Hearth website
+The APK is a thin native shell around your live Athleone website
 ([Capacitor](https://capacitorjs.com)). When it opens it loads
 `https://<your address>/caregiver`. Two consequences:
 
@@ -33,7 +33,7 @@ The APK is a thin native shell around your live Hearth website
 1. Put `hearth-intake-app` in a GitHub repository (private is fine).
 2. On GitHub, open the repo → **Actions** → **Android APK** →
    **Run workflow**.
-3. **server_url:** your Hearth address, e.g. `https://203-0-113-10.sslip.io`.
+3. **server_url:** your Athleone address, e.g. `https://203-0-113-10.sslip.io`.
 4. When the run finishes (~5 minutes), download the
    **hearth-android-N** artifact. It's a zip containing `app-debug.apk`.
 

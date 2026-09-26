@@ -11,7 +11,7 @@ export default function Error({ error, reset }) {
       <div className="max-w-[440px] text-center">
         <div className="font-display font-extrabold text-[20px]">Something went wrong</div>
         <p className="text-[13.5px] text-[var(--muted)] mt-2">
-          That page hit an error. Try again — if it keeps happening, tell your Hearth contact and mention this code:
+          That page hit an error. Try again — if it keeps happening, tell your Athleone contact and mention this code:
         </p>
         {error?.digest && <p className="font-mono text-[12px] mt-2 text-[var(--muted)]">{error.digest}</p>}
         <div className="flex justify-center gap-3 mt-5">

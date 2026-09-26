@@ -13,7 +13,7 @@ const serverUrl = (process.env.HEARTH_SERVER_URL || 'https://app.example.com').r
 /** @type {import('@capacitor/cli').CapacitorConfig} */
 const config = {
   appId: process.env.HEARTH_APP_ID || 'com.hearthcare.caregiver',
-  appName: 'Hearth',
+  appName: 'Athleone',
   webDir: 'www',
   server: {
     url: `${serverUrl}/caregiver`,

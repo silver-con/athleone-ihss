@@ -29,7 +29,7 @@ export default async function CommunicationsPage() {
     <div className="max-w-[1000px]">
       <h1 className="font-display font-extrabold text-[24px]">Communications</h1>
       <p className="text-[13.5px] text-[var(--muted)] mt-1 mb-6 max-w-[720px]">
-        Email and text messages Hearth sends for {organization?.name || 'your agency'}: password resets, sign-in codes,
+        Email and text messages Athleone sends for {organization?.name || 'your agency'}: password resets, sign-in codes,
         new-account welcomes, and message notifications between the office and caregivers.
       </p>
 

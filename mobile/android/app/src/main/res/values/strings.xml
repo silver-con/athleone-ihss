@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Hearth</string>
-    <string name="title_activity_main">Hearth</string>
+    <string name="app_name">Athleone</string>
+    <string name="title_activity_main">Athleone</string>
     <string name="package_name">com.hearthcare.caregiver</string>
     <string name="custom_url_scheme">com.hearthcare.caregiver</string>
 </resources>

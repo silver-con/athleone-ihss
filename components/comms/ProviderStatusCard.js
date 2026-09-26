@@ -46,7 +46,7 @@ export default function ProviderStatusCard({ kind, status }) {
           <summary className="cursor-pointer font-display font-bold text-[var(--text)]">How to connect</summary>
           <p className="mt-2">
             Add these to the server&rsquo;s environment (the <span className="font-mono">.env</span> file, or your
-            DigitalOcean app settings), then restart Hearth:
+            DigitalOcean app settings), then restart Athleone:
           </p>
           <ul className="mt-2 flex flex-col gap-1.5">
             {SETUP[kind].map(([name, vars]) => (

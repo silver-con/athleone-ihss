@@ -51,7 +51,7 @@ export default function OfficeMessageComposer({ caregiverId, caregiverName, noti
             {state.notified.map((n) => `${n.channel === 'sms' ? 'Text' : 'Email'} notice ${NOTE[n.status] || n.status}${n.error ? ` — ${n.error}` : ''}`).join(' · ')}
           </>
         ) : notifyChannel === 'none' ? (
-          'Caregivers are not notified — they see it next time they open Hearth. (Change on the Communications page.)'
+          'Caregivers are not notified — they see it next time they open Athleone. (Change on the Communications page.)'
         ) : (
           `They’ll get a ${notifyChannel === 'both' ? 'text and an email' : notifyChannel === 'email' ? 'an email' : 'text'} saying a message is waiting. Enter sends · Shift+Enter for a new line.`
         )}

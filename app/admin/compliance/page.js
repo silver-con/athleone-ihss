@@ -35,9 +35,9 @@ export default async function CompliancePage() {
         <h1 className="font-display font-extrabold text-[24px]">EVV Compliance Center</h1>
         <p className="text-[13.5px] text-[var(--muted)] mt-1 max-w-[720px]">
           {organization?.name || 'Your agency'} is registered in{' '}
-          {organization?.state || 'a state Hearth doesn&rsquo;t recognize'}, and Hearth doesn&rsquo;t yet
+          {organization?.state || 'a state Athleone doesn&rsquo;t recognize'}, and Athleone doesn&rsquo;t yet
           have that state&rsquo;s EVV compliance figures (usage threshold, enforcement ladder, reason
-          codes) configured here — Texas is the only state built out so far. Reach out to your Hearth
+          codes) configured here — Texas is the only state built out so far. Reach out to your Athleone
           contact to get {organization?.state || 'your state'} added.
         </p>
       </div>

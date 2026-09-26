@@ -75,7 +75,7 @@ export default async function FaxPage({ params }) {
 
           <div className="text-[13px] text-[oklch(45%_0.02_80)] mb-3.5">{fax.letterDate}</div>
           <div className="text-[13px] mb-[18px] leading-relaxed">
-            Hearth Home Care<br />
+            Sunrise Home Care<br />
             Attn: Intake Coordinator
           </div>
           <div className="font-bold text-[13.5px] mb-4">

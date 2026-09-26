@@ -47,7 +47,7 @@ export default function InstallAppBanner() {
     <div className="shrink-0 flex items-center gap-3 bg-[var(--accent-soft)] border-b border-[var(--border)] px-5 py-2.5">
       <img src="/icons/icon-192.png" alt="" className="w-8 h-8 rounded-lg" />
       <div className="flex-1 text-[12px] leading-snug">
-        <strong className="font-display">Add Hearth to your home screen</strong>
+        <strong className="font-display">Add Athleone to your home screen</strong>
         <div className="text-[var(--muted)]">
           {ios ? 'Tap Share, then “Add to Home Screen”.' : 'Opens like an app — one tap to clock in.'}
         </div>

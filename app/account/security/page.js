@@ -8,7 +8,7 @@ import { formatPhone } from '@/lib/comms/phone';
 import AuthShell from '@/components/auth/AuthShell';
 import TwoFactorForm from './TwoFactorForm';
 
-export const metadata = { title: 'Sign-in security — Hearth' };
+export const metadata = { title: 'Sign-in security — Athleone' };
 
 export default async function AccountSecurityPage() {
   const session = await getSession();

@@ -18,7 +18,7 @@
 export async function signupAction() {
   return {
     error:
-      'Self-service signup is closed. Agency accounts are created by Hearth — ' +
-      'contact your Hearth representative to have one set up.',
+      'Self-service signup is closed. Agency accounts are created by Athleone — ' +
+      'contact your Athleone representative to have one set up.',
   };
 }

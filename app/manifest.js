@@ -3,8 +3,8 @@
 // is what the Android APK wrapper (mobile/) is built around.
 export default function manifest() {
   return {
-    name: 'Hearth',
-    short_name: 'Hearth',
+    name: 'Athleone',
+    short_name: 'Athleone',
     description: 'Visits, EVV clock-in/out and messages for home-care caregivers.',
     id: '/caregiver',
     start_url: '/caregiver',

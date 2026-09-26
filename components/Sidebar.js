@@ -41,7 +41,7 @@ export default function Sidebar() {
             <path d="M5.5 10v9.5a1 1 0 0 0 1 1H17.5a1 1 0 0 0 1-1V10" />
           </svg>
         </div>
-        <div className="font-display font-extrabold text-[17px]">Hearth</div>
+        <div className="font-display font-extrabold text-[17px]">Athleone</div>
       </Link>
 
       {NAV_ITEMS.map((item) => {

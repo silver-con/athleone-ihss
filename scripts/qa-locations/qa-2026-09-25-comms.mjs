@@ -87,7 +87,7 @@ async function run() {
   const r2 = await sendEmail({ organizationId: ORG, to: 'a@b.test', template: 'password_reset', ...T.passwordResetEmail({ name: 'A', organizationName: 'Comms Agency', resetUrl: 'https://x/reset?token=SECRET123', minutes: 60 }) });
   row = await queryOne('SELECT * FROM notifications WHERE id = $1', [r2.id]);
   eq('a sensitive message (reset link) is stored WITHOUT its body', row.body, null);
-  check('  ...but with its subject', row.subject === 'Reset your Hearth password');
+  check('  ...but with its subject', row.subject === 'Reset your Athleone password');
   const bad = await sendEmail({ organizationId: ORG, to: 'not-an-email', template: 'test_email', subject: 's', text: 't' });
   check('an invalid address is refused without a row', !bad.ok && !bad.id);
   const badSms = await sendSms({ organizationId: ORG, to: '12', template: 'test_sms', body: 'x' });
@@ -186,7 +186,7 @@ async function run() {
   check('html escapes the name', w.html.includes('&lt;b&gt;x&lt;/b&gt;') && !w.html.includes('<b>x</b>'));
   check('html escapes the agency name', w.html.includes('A&amp;B Care'));
   const n1 = T.newMessageForCaregiverSms({ organizationName: 'A', preview: null, url: 'https://app/caregiver/messages' });
-  check('default new-message text says only that a message is waiting', n1.body === 'A sent you a message in Hearth. Read it: https://app/caregiver/messages');
+  check('default new-message text says only that a message is waiting', n1.body === 'A sent you a message in Athleone. Read it: https://app/caregiver/messages');
   eq('previewOf trims to one line', T.previewOf('line one\n\nline   two'), 'line one line two');
   check('previewOf caps length', T.previewOf('x'.repeat(300)).length === 140);
 }

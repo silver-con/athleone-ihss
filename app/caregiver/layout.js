@@ -36,7 +36,7 @@ export default async function CaregiverLayout({ children }) {
                   <path d="M5.5 10v9.5a1 1 0 0 0 1 1H17.5a1 1 0 0 0 1-1V10" />
                 </svg>
               </div>
-              <span className="font-display font-extrabold text-[15px]">Hearth</span>
+              <span className="font-display font-extrabold text-[15px]">Athleone</span>
             </div>
             {/* Demo-only link back to the landing page; hidden on phones. */}
             <Link href="/" className="hidden sm:inline text-[11.5px] font-display font-bold text-[var(--muted)]">

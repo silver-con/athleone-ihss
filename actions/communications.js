@@ -62,7 +62,7 @@ export async function sendTestEmailAction(prevState, formData) {
     userId: session.userId,
     to,
     template: 'test_email',
-    fromName: organization?.name ? `${organization.name} via Hearth` : undefined,
+    fromName: organization?.name ? `${organization.name} via Athleone` : undefined,
     ...t,
   });
   revalidatePath('/admin/communications');
@@ -93,9 +93,9 @@ export async function platformSendTestAction(prevState, formData) {
   let result;
   if (channel === 'sms') {
     if (!toE164(to)) return { tone: 'bad', text: 'Enter a mobile number.' };
-    result = await sendSms({ to, template: 'test_sms', ...testSms({ sentBy: `${session.name} (Hearth platform)` }) });
+    result = await sendSms({ to, template: 'test_sms', ...testSms({ sentBy: `${session.name} (Athleone platform)` }) });
   } else {
-    result = await sendEmail({ to: to || session.email, template: 'test_email', ...testEmail({ sentBy: `${session.name} (Hearth platform)` }) });
+    result = await sendEmail({ to: to || session.email, template: 'test_email', ...testEmail({ sentBy: `${session.name} (Athleone platform)` }) });
   }
   return describe(result, channel === 'sms' ? 'text' : 'email');
 }

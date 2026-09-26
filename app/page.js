@@ -56,7 +56,7 @@ export default function Home() {
               <path d="M5.5 10v9.5a1 1 0 0 0 1 1H17.5a1 1 0 0 0 1-1V10" />
             </svg>
           </div>
-          <div className="font-display font-extrabold text-[26px]">Hearth</div>
+          <div className="font-display font-extrabold text-[26px]">Athleone</div>
         </div>
         <p className="text-center text-[14px] text-[var(--muted)] max-w-[440px] mx-auto">
           One IHSS caregiver-agency prototype, three perspectives on the same data — pick a view to
@@ -90,7 +90,7 @@ export default function Home() {
           logging in as that role. See the README for demo credentials.
         </p>
         <p className="text-center text-[12px] text-[var(--muted)] mt-2">
-          New agency? Accounts are created by Hearth — contact your Hearth representative.
+          New agency? Accounts are created by Athleone — contact your Athleone representative.
         </p>
       </div>
     </div>

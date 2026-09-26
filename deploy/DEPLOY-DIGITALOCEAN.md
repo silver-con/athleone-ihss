@@ -1,6 +1,6 @@
-# Deploying Hearth on DigitalOcean
+# Deploying Athleone on DigitalOcean
 
-Two ways to run Hearth on DigitalOcean. **Option A is the one to use for the
+Two ways to run Athleone on DigitalOcean. **Option A is the one to use for the
 client demo.** It costs about $12/month, runs on one server you control, and
 gets HTTPS on its own. Option B (App Platform) is for later, when you'd rather
 DigitalOcean run the servers for you.
@@ -64,11 +64,11 @@ The script:
 - opens only ports 22, 80 and 443;
 - asks for your domain (or accepts the suggested sslip.io address);
 - writes `.env.production` with new random secrets;
-- builds and starts Hearth, Postgres and Caddy;
+- builds and starts Athleone, Postgres and Caddy;
 - runs the database migrations.
 
 The first build takes 3–5 minutes. When it finishes it prints
-`Hearth is up: https://…`.
+`Athleone is up: https://…`.
 
 > **Back up `EVV_CREDENTIALS_KEY`** from `/opt/hearth/.env.production`
 > somewhere safe (a password manager). If it's lost, saved DocuSign and EVV
@@ -86,7 +86,7 @@ docker compose --env-file .env.production exec app \
 The demo logins are the same as locally (`admin@hearth.demo` / `admin123`,
 and so on). **Change them before a real agency uses the server.**
 
-### 6. Create your platform admin (Hearth staff account)
+### 6. Create your platform admin (Athleone staff account)
 
 ```bash
 docker compose --env-file .env.production exec app \
@@ -136,7 +136,7 @@ Afterwards, sign in as an agency admin, open **Communications**, and use
 | **Any SMTP** (Microsoft 365, Google Workspace, Mailgun, Amazon SES) | `EMAIL_PROVIDER=smtp`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | Port 587 (or 465 with `SMTP_SECURE=true`) |
 
 `EMAIL_FROM` has to be an address on a domain the provider has verified, e.g.
-`"Hearth <no-reply@youragency.com>"`.
+`"Athleone <no-reply@youragency.com>"`.
 
 > DigitalOcean blocks outgoing SMTP on ports 25/465/587 for new accounts.
 > SendGrid, Postmark and Resend send over HTTPS and aren't affected. For SMTP,
@@ -157,7 +157,7 @@ Afterwards, sign in as an agency admin, open **Communications**, and use
 
 ### DocuSign
 
-DocuSign is set up **per agency** inside Hearth, not in `.env.production`:
+DocuSign is set up **per agency** inside Athleone, not in `.env.production`:
 sign in as the agency admin → **E-Signature** → enter the Integration Key, API
 user, account ID and RSA private key → **Test connection**. For automatic
 "signed" updates, follow the **DocuSign Connect** steps on the same page. It

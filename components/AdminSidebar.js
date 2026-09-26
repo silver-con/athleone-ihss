@@ -263,7 +263,7 @@ export default function AdminSidebar({ role, badges = {} }) {
             <path d="M5.5 10v9.5a1 1 0 0 0 1 1H17.5a1 1 0 0 0 1-1V10" />
           </svg>
         </div>
-        <div className="font-display font-extrabold text-[17px]">Hearth</div>
+        <div className="font-display font-extrabold text-[17px]">Athleone</div>
       </Link>
       <div className="px-1.5 pb-5 text-[11px] font-display font-bold uppercase tracking-wide text-[var(--muted)]">
         {role === 'LOCATION_ADMIN' ? 'Location' : 'Admin'}

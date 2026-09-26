@@ -17,7 +17,7 @@ export default async function PlatformCommunicationsPage() {
   const byOrg = new Map();
   for (const r of summary) {
     const key = r.organizationId || 'platform';
-    if (!byOrg.has(key)) byOrg.set(key, { name: r.organizationName || 'Hearth platform (no agency)', email: 0, sms: 0, failed: 0 });
+    if (!byOrg.has(key)) byOrg.set(key, { name: r.organizationName || 'Athleone platform (no agency)', email: 0, sms: 0, failed: 0 });
     const o = byOrg.get(key);
     o[r.channel] += r.count;
     if (['failed', 'undelivered'].includes(r.status)) o.failed += r.count;

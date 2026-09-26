@@ -4,7 +4,7 @@ import { isResetTokenUsable } from '@/lib/sign-in';
 import { PASSWORD_MIN_LENGTH } from '@/lib/passwords';
 import ResetPasswordForm from './ResetPasswordForm';
 
-export const metadata = { title: 'Choose a new password — Hearth', referrer: 'no-referrer' };
+export const metadata = { title: 'Choose a new password — Athleone', referrer: 'no-referrer' };
 
 export default async function ResetPasswordPage({ searchParams }) {
   const params = await searchParams;
@@ -14,7 +14,7 @@ export default async function ResetPasswordPage({ searchParams }) {
   return (
     <AuthShell
       title="Choose a new password"
-      subtitle={usable ? 'This signs you out of Hearth on every other device.' : null}
+      subtitle={usable ? 'This signs you out of Athleone on every other device.' : null}
       footer={
         <p className="text-center text-[12px] text-[var(--muted)] mt-5">
           <Link href="/login" className="font-display font-bold text-[var(--accent)]">

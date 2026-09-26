@@ -1,4 +1,4 @@
-# Hearth — IHSS Caregiver Agency App
+# Athleone — IHSS Caregiver Agency App
 
 A full-stack Next.js app for one caregiver agency's data, with **three
 perspectives** and real per-role login:
@@ -20,7 +20,7 @@ shared browser state.
 
 ## Start here
 
-- **New to the codebase?** Read [`docs/LEARN-HEARTH.md`](docs/LEARN-HEARTH.md): roles, a client demo script, how the code fits together, and a glossary.
+- **New to the codebase?** Read [`docs/LEARN-ATHLEONE.md`](docs/LEARN-ATHLEONE.md): roles, a client demo script, how the code fits together, and a glossary.
 - **Deploying?** [`deploy/DEPLOY-DIGITALOCEAN.md`](deploy/DEPLOY-DIGITALOCEAN.md): one Droplet with automatic HTTPS, or App Platform.
 - **Phone app?** [`mobile/README.md`](mobile/README.md): install from the website, or build the Android APK on GitHub.
 - **Something broken?** [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
@@ -30,7 +30,7 @@ shared browser state.
 - **Email and SMS**, pluggable. Email: SendGrid, Postmark, Resend or any SMTP. SMS: Twilio. You choose them with environment variables (`.env.production.example`). With no keys, every message is recorded in an outbox (**Admin → Communications**) instead of being sent.
 - **Forgot password**, **two-step sign-in** (email or text codes; agencies can require it for office staff), and **welcome emails** with a set-your-password link.
 - **Office Messages inbox** (`/admin/messages`). Caregivers get notified by text or email; caregivers can text the agency number and the text lands in their thread.
-- **DocuSign Connect**: signed envelopes update Hearth automatically.
+- **DocuSign Connect**: signed envelopes update Athleone automatically.
 - **Production kit**: Dockerfile, docker-compose with Caddy HTTPS, a startup config check, security headers, a health check, error pages, and one migration command (`npm run db:migrate`).
 - **Caregiver app on phones**: installable web app, plus an Android APK project and a GitHub workflow that builds it.
 
@@ -129,7 +129,7 @@ change or remove them (`scripts/seed.mjs`) before using this anywhere real.
 
 ### Multi-tenancy
 
-Hearth is a multi-tenant SaaS platform — every table carries an
+Athleone is a multi-tenant SaaS platform — every table carries an
 `organization_id`, every session carries the signed-in user's
 `organizationId`, and every function in `lib/queries.js` requires it as its
 first argument and filters on it. The `admin@secondagency.demo` login above
@@ -142,7 +142,7 @@ brief for a senior developer's review.
 
 ### Platform admin
 
-A platform admin is Hearth's own staff, not any tenant's — it can see
+A platform admin is Athleone's own staff, not any tenant's — it can see
 every agency's onboarding/EVV status at `/platform`, but nothing else in
 the app, and (v1) that dashboard is read-only. This is deliberately the
 highest-risk role in the system (architecture spec §3), so unlike every

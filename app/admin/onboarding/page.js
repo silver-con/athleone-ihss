@@ -82,12 +82,12 @@ export default async function AdminOnboardingPage({ searchParams }) {
       <p className="text-[13.5px] text-[var(--muted)] mt-1">
         Everything {organization?.name || 'your agency'} needs before EVV transmission goes live — most of
         this can be finished whenever you&rsquo;re ready, and nothing here blocks you from using the rest
-        of Hearth in the meantime.
+        of Athleone in the meantime.
       </p>
 
       {params?.justCreated && (
         <div className="bg-[var(--success-soft)] border border-[oklch(85%_0.05_150)] rounded-xl px-3.5 py-2.5 text-[12.5px] text-[var(--success)] font-display font-bold mt-4">
-          Your agency&rsquo;s account is set up — welcome to Hearth.
+          Your agency&rsquo;s account is set up — welcome to Athleone.
         </div>
       )}
 
@@ -114,7 +114,7 @@ export default async function AdminOnboardingPage({ searchParams }) {
         <StepCard n={2} title="Provider info on file" done={providerInfoDone}>
           <p className="text-[12.5px] text-[var(--muted)] mt-1 mb-3">
             Your state, Medicaid provider number, NPI, and state home-care license number &mdash; recorded
-            here, not verified by Hearth.
+            here, not verified by Athleone.
           </p>
           <form action={updateProviderInfoAction} className="grid grid-cols-4 gap-3">
             <label className="flex flex-col gap-1 text-[11.5px] font-display font-bold text-[var(--muted)]">
@@ -164,7 +164,7 @@ export default async function AdminOnboardingPage({ searchParams }) {
         <StepCard n={3} title="HHAeXchange / TMHP provider enrollment" done={enrollmentDone}>
           <p className="text-[12.5px] text-[var(--muted)] mt-1 mb-3">
             Your agency completes its own provider enrollment and attestation directly with HHAeXchange/TMHP
-            &mdash; Hearth can&rsquo;t do this step on your behalf, since credentials are tied to your own
+            &mdash; Athleone can&rsquo;t do this step on your behalf, since credentials are tied to your own
             Medicaid provider identity.
           </p>
           <form action={updateProviderEnrollmentAction} className="flex flex-col gap-3">
@@ -187,10 +187,10 @@ export default async function AdminOnboardingPage({ searchParams }) {
           </form>
         </StepCard>
 
-        <StepCard n={4} title="Business Associate Agreement with Hearth" done={baaDone}>
+        <StepCard n={4} title="Business Associate Agreement with Athleone" done={baaDone}>
           <p className="text-[12.5px] text-[var(--muted)] mt-1 mb-3">
-            A signed BAA between your agency and Hearth, required before any client PHI enters the system
-            (Hearth is your Business Associate under HIPAA). This is separate from DocuSign&rsquo;s own BAA
+            A signed BAA between your agency and Athleone, required before any client PHI enters the system
+            (Athleone is your Business Associate under HIPAA). This is separate from DocuSign&rsquo;s own BAA
             on the E-Signature settings page, which only affects documents sent through DocuSign.
           </p>
           <form action={updateBaaSignedAction} className="flex flex-col gap-3">
@@ -202,7 +202,7 @@ export default async function AdminOnboardingPage({ searchParams }) {
                 className="mt-0.5"
               />
               <span className="text-[12px] text-[oklch(42%_0.1_75)]">
-                <strong className="font-display font-bold">A signed Business Associate Agreement with Hearth is on file.</strong>{' '}
+                <strong className="font-display font-bold">A signed Business Associate Agreement with Athleone is on file.</strong>{' '}
                 Only check this once that&rsquo;s actually true.
               </span>
             </label>
@@ -225,7 +225,7 @@ export default async function AdminOnboardingPage({ searchParams }) {
           <p className="text-[12.5px] text-[var(--muted)] mt-1">
             {credentialsConfigured
               ? `Configured (status: ${evvCredentials.status}).`
-              : 'Not configured yet — requires HHAeXchange implementation credentials, which your agency requests naming Hearth as your EVV vendor.'}
+              : 'Not configured yet — requires HHAeXchange implementation credentials, which your agency requests naming Athleone as your EVV vendor.'}
           </p>
         </StepCard>
 

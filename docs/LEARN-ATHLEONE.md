@@ -1,26 +1,26 @@
-# Learn Hearth: a guide for the person running it
+# Learn Athleone: a guide for the person running it
 
-This guide explains what Hearth does, who uses which part, how the code fits
+This guide explains what Athleone does, who uses which part, how the code fits
 together, and how to demo it and change it safely. Read it once top to bottom.
 After that, use the headings to find things.
 
 ---
 
-## 1. What Hearth is
+## 1. What Athleone is
 
-Hearth is software for Texas home-care agencies (IHSS / personal attendant
-services). A single Hearth server runs many agencies at once. Each agency's
+Athleone is software for Texas home-care agencies (IHSS / personal attendant
+services). A single Athleone server runs many agencies at once. Each agency's
 data is walled off from the others. This is called *multi-tenant*: each agency
 is a *tenant*, stored as a row in `organizations`.
 
-For one agency, Hearth covers the whole working loop:
+For one agency, Athleone covers the whole working loop:
 
 1. **Referral in.** A health plan or hospital sends a referral (usually by
    fax). A coordinator turns it into a client with an intake form.
 2. **Plan and schedule.** The payer's service authorization becomes a care
    plan (approved tasks and units). The office schedules visits and assigns
    caregivers.
-3. **Visit happens.** The caregiver clocks in and out on their phone. Hearth
+3. **Visit happens.** The caregiver clocks in and out on their phone. Athleone
    records time and GPS: this is **EVV**, Electronic Visit Verification, which
    Texas Medicaid requires.
 4. **Fix and send.** Visits with problems get *visit maintenance* using Texas
@@ -36,7 +36,7 @@ For one agency, Hearth covers the whole working loop:
 
 | Role | Signs in and lands on | What they do |
 |---|---|---|
-| **Platform admin** (Hearth staff: you) | `/platform` | Onboard new agencies, see every agency's go-live status, email/SMS health. Cannot see any agency's clients. |
+| **Platform admin** (Athleone staff: you) | `/platform` | Onboard new agencies, see every agency's go-live status, email/SMS health. Cannot see any agency's clients. |
 | **Admin** (agency owner/manager) | `/admin` | Everything inside their own agency |
 | **Location admin** (branch manager) | `/admin` | Same screens, narrowed to one location |
 | **Coordinator** (intake) | `/referrals` | Referrals, intake, client list |
@@ -209,7 +209,7 @@ includes reset links and sign-in codes, which lets you test those flows.
 
 A good ask for the client after the demo: *"To test live, I need: your
 HHAeXchange provider credentials (sandbox first), a DocuSign account user, and
-your OK for Hearth to text your caregivers from our number."*
+your OK for Athleone to text your caregivers from our number."*
 
 ---
 
@@ -249,8 +249,8 @@ your OK for Hearth to text your caregivers from our number."*
 | **Service authorization** | The payer's approval: service code, units, dates, tasks |
 | **PHI** | Protected health information: anything identifying a client together with their care |
 | **BAA** | Business Associate Agreement: a HIPAA contract required with any vendor that touches PHI |
-| **Tenant / organization** | One agency on the Hearth platform |
-| **Outbox** | The record of every email/text Hearth sent (`notifications` table) |
+| **Tenant / organization** | One agency on the Athleone platform |
+| **Outbox** | The record of every email/text Athleone sent (`notifications` table) |
 
 ---
 

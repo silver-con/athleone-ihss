@@ -41,7 +41,7 @@ export default async function EvvSyncPage() {
         <div>
           <h1 className="font-display font-extrabold text-[24px]">EVV Transmission</h1>
           <p className="text-[13.5px] text-[var(--muted)] mt-1">
-            What Hearth has sent to the state EVV aggregator, and what the state has actually confirmed.
+            What Athleone has sent to the state EVV aggregator, and what the state has actually confirmed.
             A visit recorded here is not compliant until it&rsquo;s confirmed there.
           </p>
         </div>
@@ -59,7 +59,7 @@ export default async function EvvSyncPage() {
             Not connected to the state aggregator
           </div>
           <p className="text-[12.5px] text-[oklch(42%_0.1_75)] mt-1">
-            Visits are being recorded in Hearth and queued, but nothing is being transmitted. Until this
+            Visits are being recorded in Athleone and queued, but nothing is being transmitted. Until this
             connection is live and certified, the agency is not meeting its Texas EVV obligation.
           </p>
         </div>

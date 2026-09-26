@@ -12,7 +12,7 @@ export default function DocusignConnectForm({ webhookUrl, configured, lastEventA
         <div>
           <div className="font-display font-extrabold text-[14.5px]">Automatic status updates (DocuSign Connect)</div>
           <p className="text-[12.5px] text-[var(--muted)] mt-1 max-w-[640px]">
-            With Connect on, DocuSign tells Hearth the moment an envelope is completed — onboarding packets and
+            With Connect on, DocuSign tells Athleone the moment an envelope is completed — onboarding packets and
             orientations flip to signed without anyone pressing &ldquo;check status&rdquo;.
           </p>
         </div>

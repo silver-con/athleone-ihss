@@ -2,10 +2,10 @@ import "./globals.css";
 import PwaSetup from "@/components/PwaSetup";
 
 export const metadata = {
-  title: "Hearth",
+  title: "Athleone",
   description:
     "IHSS caregiver-agency app — referral intake, admin scheduling/EVV compliance, and a caregiver mobile app, backed by Postgres with real per-role login.",
-  appleWebApp: { capable: true, title: "Hearth", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Athleone", statusBarStyle: "default" },
   icons: { apple: "/apple-touch-icon.png" },
 };
 

@@ -6,7 +6,7 @@ import { getSignInChallenge } from '@/lib/queries';
 import { emailConfig, smsConfig } from '@/lib/comms/config';
 import VerifyCodeForm from './VerifyCodeForm';
 
-export const metadata = { title: 'Enter your code — Hearth' };
+export const metadata = { title: 'Enter your code — Athleone' };
 
 // Second step of sign-in. Only reachable while holding a valid challenge
 // cookie (set by loginAction after a correct password).

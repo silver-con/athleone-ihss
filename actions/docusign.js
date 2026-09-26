@@ -104,7 +104,7 @@ export async function startPacketSigningAction() {
   let envelopeId;
   try {
     const envelope = await createEnvelope(credentials, {
-      emailSubject: `${organization?.name || 'Hearth'} — onboarding documents to sign`,
+      emailSubject: `${organization?.name || 'Athleone'} — onboarding documents to sign`,
       documents,
       signerEmail: caregiver.email,
       signerName: caregiver.name,
@@ -177,7 +177,7 @@ export async function startOrientationSigningAction(orientationId, formData) {
 
   try {
     const envelope = await createEnvelope(credentials, {
-      emailSubject: `${organization?.name || 'Hearth'} — Attendant Orientation acknowledgment`,
+      emailSubject: `${organization?.name || 'Athleone'} — Attendant Orientation acknowledgment`,
       documents: [{ name: 'Attendant Orientation Acknowledgment', html }],
       signerEmail: caregiver.email,
       signerName: caregiver.name,
@@ -245,5 +245,5 @@ export async function saveDocusignConnectKeyAction(prevState, formData) {
     detail: remove ? 'DocuSign Connect HMAC key removed' : 'DocuSign Connect HMAC key saved',
   });
   revalidatePath('/admin/esign');
-  return { success: remove ? 'Removed. Status updates will need the manual check again.' : 'Saved. Hearth will now accept signed events from DocuSign.' };
+  return { success: remove ? 'Removed. Status updates will need the manual check again.' : 'Saved. Athleone will now accept signed events from DocuSign.' };
 }

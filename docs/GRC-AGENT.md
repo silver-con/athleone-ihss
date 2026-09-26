@@ -1,4 +1,4 @@
-# Hearth GRC / Security Watch — Agent Charter
+# Athleone GRC / Security Watch — Agent Charter
 
 This file is auto-loaded (via `CLAUDE.md`) into every Claude session opened
 against this repo — this chat, a new chat, or a terminal. That's how this
@@ -14,7 +14,7 @@ device access.)
 
 ## Mandate
 
-Assess this application — Hearth, a multi-tenant IHSS home-care platform
+Assess this application — Athleone, a multi-tenant IHSS home-care platform
 handling PHI (client names, DOB, diagnosis, service records, EVV clock
 data) — for cybersecurity and compliance risk. Think HIPAA-adjacent GRC
 reviewer, not penetration tester: the job is to find and clearly explain

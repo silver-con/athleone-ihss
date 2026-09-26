@@ -13,7 +13,7 @@ export default function AuthShell({ title, subtitle, children, footer }) {
               <path d="M5.5 10v9.5a1 1 0 0 0 1 1H17.5a1 1 0 0 0 1-1V10" />
             </svg>
           </div>
-          <div className="font-display font-extrabold text-[19px]">Hearth</div>
+          <div className="font-display font-extrabold text-[19px]">Athleone</div>
         </Link>
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-7">
           <h1 className="font-display font-extrabold text-[19px] mb-1">{title}</h1>

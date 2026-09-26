@@ -42,7 +42,7 @@ export default function EvvSettingsForm({ organization, stateDays, stateName }) 
         <p className="text-[12.5px] text-[var(--muted)] mt-1 max-w-[640px]">
           {stateDays
             ? `${stateName} allows ${stateDays} days after the date of service to correct a visit; after that it locks and only the payer can unlock it. You can set a shorter internal deadline so problems are fixed sooner. Leave blank to use the full ${stateDays} days.`
-            : 'Your state’s visit maintenance window isn’t configured in Hearth yet.'}
+            : 'Your state’s visit maintenance window isn’t configured in Athleone yet.'}
         </p>
         <label className="flex flex-col gap-1.5 mt-4 text-[12.5px] font-display font-bold max-w-[260px]">
           Days after the date of service

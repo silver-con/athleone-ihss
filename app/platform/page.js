@@ -49,7 +49,7 @@ export default async function PlatformDashboardPage() {
     <div>
       <h1 className="font-display font-extrabold text-[24px]">Platform overview</h1>
       <p className="text-[13.5px] text-[var(--muted)] mt-1">
-        Every agency on Hearth, their go-live progress, EVV sync health, footprint, and pending
+        Every agency on Athleone, their go-live progress, EVV sync health, footprint, and pending
         revenue. Onboarding a new agency below is the only thing here that writes anything —
         nothing on this page can edit an agency that already exists; see that agency&rsquo;s own
         team for anything that needs to change.

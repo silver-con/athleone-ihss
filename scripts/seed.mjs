@@ -76,7 +76,7 @@ async function main() {
     await client.query(
       `INSERT INTO organizations (id, name, status) VALUES ($1, $2, 'active')
        ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, status = EXCLUDED.status`,
-      [ORG_PRIMARY, 'Hearth Home Care (Demo)']
+      [ORG_PRIMARY, 'Sunrise Home Care (Demo)']
     );
     await client.query(
       `INSERT INTO organizations (id, name, status) VALUES ($1, $2, 'trial')
@@ -208,7 +208,7 @@ async function main() {
     const COURSES = [
       ['Welcome & agency policies', 'Employee handbook highlights, attendance, and call-out procedure.', 20, 0.5, 'initial', 1],
       ['HIPAA & client privacy', 'What PHI is, how to handle it in the home, and what never leaves the house.', 25, 0.5, 'initial', 2],
-      ['EVV: clocking in and out', 'Using the Hearth app for visit verification, and what to do when something goes wrong.', 15, 0.25, 'initial', 3],
+      ['EVV: clocking in and out', 'Using the Athleone app for visit verification, and what to do when something goes wrong.', 15, 0.25, 'initial', 3],
       ['Personal care & safe transfers', 'Bathing, dressing, toileting and transfer technique without injuring yourself or the client.', 45, 1, 'initial', 4],
       ['Recognizing and reporting abuse & neglect', 'Mandatory reporting duties and how to escalate a concern.', 30, 0.75, 'initial', 5],
       ['Infection control refresher', 'Annual refresher on standard precautions and bloodborne pathogens.', 20, 0.5, 'annual', 6],
