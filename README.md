@@ -21,7 +21,7 @@ shared browser state.
 ## Start here
 
 - **New to the codebase?** Read [`docs/LEARN-ATHLEONE.md`](docs/LEARN-ATHLEONE.md): roles, a client demo script, how the code fits together, and a glossary.
-- **Deploying?** [`deploy/DEPLOY-DIGITALOCEAN.md`](deploy/DEPLOY-DIGITALOCEAN.md): one Droplet with automatic HTTPS, or App Platform.
+- **Deploying?** [`deploy/DEPLOY-GOOGLE-CLOUD.md`](deploy/DEPLOY-GOOGLE-CLOUD.md) (Cloud Run, recommended with Document AI) or [`deploy/DEPLOY-DIGITALOCEAN.md`](deploy/DEPLOY-DIGITALOCEAN.md).
 - **Phone app?** [`mobile/README.md`](mobile/README.md): install from the website, or build the Android APK on GitHub.
 - **Something broken?** [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
 
@@ -284,7 +284,13 @@ components/                        Shared UI (StatTile, charts, Toast, per-role
 
 ## Deploying
 
-See [`deploy/DEPLOY-DIGITALOCEAN.md`](deploy/DEPLOY-DIGITALOCEAN.md). In
+Two supported targets:
+
+- **Google Cloud** (Cloud Run + Cloud SQL + Cloud Storage + Document AI, one BAA):
+  [`deploy/DEPLOY-GOOGLE-CLOUD.md`](deploy/DEPLOY-GOOGLE-CLOUD.md) —
+  `PROJECT_ID=… bash deploy/gcp/setup.sh` in Cloud Shell.
+- **DigitalOcean** (one Droplet with Docker + Caddy):
+  [`deploy/DEPLOY-DIGITALOCEAN.md`](deploy/DEPLOY-DIGITALOCEAN.md). In
 short, on a fresh Ubuntu Droplet: `sudo bash deploy/setup-droplet.sh`. It
 installs Docker, generates secrets, and starts the app, Postgres and Caddy
 (automatic HTTPS). Database migrations run automatically every time the

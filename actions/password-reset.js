@@ -3,6 +3,7 @@
 // "Forgot password?" — public Server Actions (no session: the person can't
 // sign in, that's the point). All the rules are in lib/sign-in.js.
 import { redirect } from 'next/navigation';
+import { after } from 'next/server';
 import { requestPasswordReset, completePasswordReset, RESET_REQUESTED_MESSAGE } from '@/lib/sign-in';
 import { trustedBaseUrl } from '@/lib/request-url';
 
@@ -18,6 +19,10 @@ export async function requestPasswordResetAction(prevState, formData) {
     return { done: true, message: RESET_REQUESTED_MESSAGE };
   }
   const r = await requestPasswordReset(email, { baseUrl });
+  // The email is sent after the answer goes back (so timing reveals
+  // nothing); after() keeps that work alive on hosts like Cloud Run that
+  // may otherwise pause the server once the response is sent.
+  after(() => r.done);
   return { done: true, message: r.message };
 }
 

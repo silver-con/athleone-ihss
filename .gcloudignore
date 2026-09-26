@@ -1,0 +1,15 @@
+# What `gcloud builds submit` uploads to Cloud Build (same idea as .dockerignore).
+.git
+.gitignore
+node_modules
+.next
+.env
+.env.*
+!.env.production.example
+storage
+private_key
+*.pem
+mobile/node_modules
+mobile/android/.gradle
+mobile/android/app/build
+docs/security-assessments
