@@ -296,6 +296,29 @@ async function run() {
     clearGoogleTokenCache();
   }
 
+  console.log('\n== Google rejects the field mask with a plain "invalid argument" ==');
+  {
+    let n = 0;
+    const bodies = [];
+    const mfetch = async (url, init = {}) => {
+      if (url.includes('oauth2')) return Response.json({ access_token: 't', expires_in: 3600 });
+      n++;
+      bodies.push(JSON.parse(init.body));
+      if (n === 1) return Response.json({ error: { code: 400, message: 'Request contains an invalid argument.', status: 'INVALID_ARGUMENT' } }, { status: 400 });
+      return Response.json({ document: { text: 'x', entities: [{ type: 'client_name', mentionText: 'Masked Retry', confidence: 0.9 }], pages: [{ pageNumber: 1 }] } });
+    };
+    clearGoogleTokenCache();
+    const menv = { GOOGLE_SERVICE_ACCOUNT_JSON: saJson, GOOGLE_CLOUD_PROJECT: 'p', DOCAI_PROCESSOR_ID: 'x', DOCAI_PROVIDER: 'google' };
+    const mr = await extractWithGoogle(Buffer.from('%PDF'), 'application/pdf', { fetchImpl: mfetch, env: menv });
+    check('a plain 400 is retried without the field mask', n === 2 && 'fieldMask' in bodies[0] && !('fieldMask' in bodies[1]));
+    check('  ...and the retry\'s result is used', JSON.stringify(mr).includes('Masked Retry'));
+    const efetch = async (url) => url.includes('oauth2') ? Response.json({ access_token: 't', expires_in: 3600 })
+      : Response.json({ error: { code: 400, message: 'Request contains an invalid argument.', details: [{ '@type': 'type.googleapis.com/google.rpc.BadRequest', fieldViolations: [{ field: 'processor', description: 'Processor has no deployed version' }] }] } }, { status: 400 });
+    clearGoogleTokenCache();
+    await throws('Google\'s explanation is shown to the reviewer', () => extractWithGoogle(Buffer.from('%PDF'), 'application/pdf', { fetchImpl: efetch, env: menv }), 'no deployed version');
+    clearGoogleTokenCache();
+  }
+
   console.log('\n== Hardening (after review) ==');
   // Two deliveries of the same fax at the same moment -> one row.
   const raceBuf = Buffer.concat([sample('molina-authorization-rosa-delgado.pdf'), Buffer.from('\n%race-test\n')]);
