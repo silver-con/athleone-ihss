@@ -64,7 +64,7 @@ export default async function ReferralDetailPage({ params }) {
         {referral.fax ? (
           <div className="mt-5 pt-5 border-t border-[var(--border)]">
             <Link
-              href={`/fax/${referral.id}`}
+              href={referral.fax.documentId ? `/inbox/${referral.fax.documentId}` : `/fax/${referral.id}`}
               className="inline-flex items-center gap-2 border border-[oklch(80%_0.02_85)] rounded-[9px] px-4 py-2.5 font-display font-bold text-[13px] text-[oklch(30%_0.02_80)]"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

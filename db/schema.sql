@@ -113,6 +113,11 @@ CREATE TABLE IF NOT EXISTS organizations (
   -- picked text instead. Caregivers can opt in themselves. Added 2026-09-25
   -- (db/migrations/2026-09-25-02-password-reset-and-two-step.sql).
   require_two_factor            boolean NOT NULL DEFAULT false,
+  -- Fax intake (2026-09-26): the agency's fax number (display only) and a
+  -- SHA-256 hash of the secret its fax provider sends with each inbound
+  -- fax webhook. The secret itself is shown once, when generated.
+  fax_number                    text,
+  fax_webhook_token_hash        text,
   created_at                    timestamptz NOT NULL DEFAULT now()
 );
 
@@ -948,6 +953,44 @@ CREATE TABLE IF NOT EXISTS sign_in_challenges (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sign_in_challenges_account ON sign_in_challenges(account_kind, account_id, created_at DESC);
+
+-- FAX / DOCUMENT INTAKE (2026-09-26). One row per incoming document (a fax
+-- from the provider webhook, or a PDF/image a coordinator uploads). The
+-- file itself lives in storage (lib/storage.js) under file_key — never in
+-- the database. extraction is what the reading engine found, field by
+-- field ({ value, confidence, page, source }); nothing reaches referrals or
+-- clients until a person approves it (referral_id is set then).
+--   status: received -> processing -> needs_review -> approved | rejected
+--           (failed = the engine errored; can be retried)
+CREATE TABLE IF NOT EXISTS incoming_documents (
+  id                  text PRIMARY KEY,
+  organization_id     text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  source              text NOT NULL CHECK (source IN ('upload', 'fax', 'sample')),
+  status              text NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'processing', 'needs_review', 'approved', 'rejected', 'failed')),
+  file_key            text NOT NULL,
+  file_name           text,
+  mime_type           text NOT NULL,
+  file_size           integer NOT NULL,
+  sha256              text NOT NULL,
+  page_count          integer,
+  sender              text,
+  engine              text,
+  doc_type            text,
+  extraction          jsonb,
+  raw_text            text,
+  error               text,
+  referral_id         text REFERENCES referrals(id) ON DELETE SET NULL,
+  uploaded_by_user_id text,
+  reviewed_by_user_id text,
+  reviewed_by_name    text,
+  reviewed_at         timestamptz,
+  reject_reason       text,
+  received_at         timestamptz NOT NULL DEFAULT now(),
+  processed_at        timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS idx_incoming_docs_org_status ON incoming_documents(organization_id, status, received_at DESC);
+CREATE INDEX IF NOT EXISTS idx_incoming_docs_sha ON incoming_documents(organization_id, sha256);
 
 -- NOTE ON MIGRATING AN EXISTING DEV DATABASE:
 -- CREATE TABLE IF NOT EXISTS is a no-op against a database that already has

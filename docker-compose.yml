@@ -32,6 +32,9 @@ services:
     environment:
       DATABASE_URL: postgresql://hearth:${POSTGRES_PASSWORD}@db:5432/hearth
       RUN_MIGRATIONS: "true"
+    volumes:
+      # Fax Inbox files (PHI) — kept across rebuilds, included in backups.
+      - faxfiles:/app/storage
     depends_on:
       db:
         condition: service_healthy
@@ -55,5 +58,6 @@ services:
 
 volumes:
   pgdata:
+  faxfiles:
   caddy_data:
   caddy_config:

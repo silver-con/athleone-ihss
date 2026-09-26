@@ -40,12 +40,28 @@ const nextConfig = {
   // (see Dockerfile) — no full node_modules needed at runtime.
   output: 'standalone',
   poweredByHeader: false,
+  experimental: {
+    // Fax uploads pass through proxy.js; allow the 20 MB the inbox accepts.
+    proxyClientMaxBodySize: '21mb',
+  },
   async headers() {
     return [
-      { source: '/:path*', headers: securityHeaders },
+      // Everything except the original-fax file gets the full set, including
+      // "never show me in a frame".
+      { source: '/((?!inbox/[^/]+/file).*)', headers: securityHeaders },
+      // The original fax is shown in a frame on our own review screen, so
+      // that one route may be framed by Athleone itself (and nobody else).
+      {
+        source: '/inbox/:id/file',
+        headers: [
+          ...securityHeaders.filter((h) => !['X-Frame-Options', 'Content-Security-Policy'].includes(h.key)),
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+        ],
+      },
       // Signed-in pages carry PHI: never let a shared/proxy cache keep them.
       {
-        source: '/(admin|caregiver|referrals|clients|fax|platform|account)/:path*',
+        source: '/(admin|caregiver|referrals|clients|fax|inbox|platform|account)/:path*',
         headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
       },
     ];

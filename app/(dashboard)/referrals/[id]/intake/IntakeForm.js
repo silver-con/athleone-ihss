@@ -6,7 +6,15 @@ import { submitIntakeAction } from '@/actions/referrals';
 
 const initialState = { error: null };
 
+// "4127 Pecan Hollow Dr, San Antonio, TX 78223" -> parts, for prefilling.
+function splitAddress(a) {
+  const m = /^(.*?),\s*([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/.exec(String(a || '').trim());
+  return m ? { street: m[1], city: m[2], state: m[3], zip: m[4] } : { street: a || '' };
+}
+
 export default function IntakeForm({ referral, careNeedOptions, locations = [] }) {
+  const fax = referral.fax || {};
+  const fromFax = { ...splitAddress(fax.address), phone: fax.phone || '', medicaidId: fax.medicaidId && /^\d{9}$/.test(fax.medicaidId) ? fax.medicaidId : '', effectiveDates: fax.effectiveDates || '' };
   const router = useRouter();
   const [state, formAction, pending] = useActionState(submitIntakeAction, initialState);
 
@@ -30,16 +38,17 @@ export default function IntakeForm({ referral, careNeedOptions, locations = [] }
         Referral from {referral.payer} · Authorization {referral.authNumber}
       </p>
 
+      {/* Filled from the fax when the referral came through the Fax Inbox. */}
       <Section title="Client Information">
         <Grid cols={2}>
           <Field label="Full Name" name="clientName" defaultValue={referral.clientName} />
           <Field label="Date of Birth" name="dob" defaultValue={referral.dob} />
-          <Field label="Phone" name="phone" placeholder="(   ) ___-____" />
+          <Field label="Phone" name="phone" placeholder="(   ) ___-____" defaultValue={fromFax.phone} />
           <Field label="Preferred Language" name="language" defaultValue="English" />
-          <Field label="Street Address" name="address" full />
-          <Field label="City" name="city" />
-          <Field label="State" name="state" defaultValue="TX" />
-          <Field label="ZIP" name="zip" />
+          <Field label="Street Address" name="address" full defaultValue={fromFax.street} />
+          <Field label="City" name="city" defaultValue={fromFax.city} />
+          <Field label="State" name="state" defaultValue={fromFax.state || 'TX'} />
+          <Field label="ZIP" name="zip" defaultValue={fromFax.zip} />
           <div className="flex flex-col gap-1.5 col-span-full">
             <span className="text-[11.5px] font-display font-bold text-[oklch(45%_0.02_80)]">Location</span>
             <select
@@ -66,11 +75,11 @@ export default function IntakeForm({ referral, careNeedOptions, locations = [] }
       <Section title="Payer & Authorization">
         <Grid cols={2}>
           <Field label="Payer Name" name="payerName" defaultValue={referral.payer} />
-          <Field label="Medicaid ID (9 digits)" name="memberId" placeholder="Required before EVV visits can be sent" />
+          <Field label="Medicaid ID (9 digits)" name="memberId" placeholder="Required before EVV visits can be sent" defaultValue={fromFax.medicaidId} />
           <Field label="Authorization Number" name="authNumber" defaultValue={referral.authNumber} />
           <Field label="Authorized Hours / Week" name="authHours" defaultValue={referral.authHours} />
           <Field label="Service Type" name="serviceType" defaultValue={referral.service} />
-          <Field label="Effective Dates" name="effectiveDates" />
+          <Field label="Effective Dates" name="effectiveDates" defaultValue={fromFax.effectiveDates} />
         </Grid>
       </Section>
 

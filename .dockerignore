@@ -12,3 +12,4 @@ mobile/node_modules
 docs/security-assessments
 npm-debug.log*
 .DS_Store
+storage

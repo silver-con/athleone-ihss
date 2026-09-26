@@ -7,7 +7,7 @@ import { ROUTE_PERMISSIONS, PERMISSIONS, ROLE_HOME, CHANGE_PASSWORD_PATH } from 
 // list is intentionally still just the coarse prefixes — it only answers
 // "does this need a login," not "which role" — that question is answered
 // per-route below, by lib/permissions.js's ROUTE_PERMISSIONS table.
-const PROTECTED_PREFIXES = ['/referrals', '/clients', '/fax', '/admin', '/caregiver', '/platform', '/account'];
+const PROTECTED_PREFIXES = ['/referrals', '/clients', '/fax', '/inbox', '/admin', '/caregiver', '/platform', '/account'];
 
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
@@ -61,6 +61,7 @@ export const config = {
     '/referrals/:path*',
     '/clients/:path*',
     '/fax/:path*',
+    '/inbox/:path*',
     '/admin/:path*',
     '/caregiver/:path*',
     '/platform/:path*',

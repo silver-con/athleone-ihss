@@ -47,6 +47,8 @@ COPY --from=deps --chown=hearth:hearth /app/node_modules/bcryptjs ./node_modules
 COPY --chown=hearth:hearth docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
+# Fax Inbox files (STORAGE_DRIVER=local); docker-compose mounts a volume here.
+RUN mkdir -p /app/storage && chown hearth:hearth /app/storage
 USER hearth
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

@@ -63,9 +63,14 @@ on a phone, or in a narrow window.
 
 1. **The agency's day** (`/admin`, as admin). KPIs, the *Needs attention*
    panel, and the charts.
-2. **A referral becomes a client** (as coordinator). `/referrals`: open the
-   Molina referral, then **View original fax**, **Start intake**, **Submit**.
-   The client appears under Clients.
+2. **A fax becomes a client** (as coordinator). Open **Fax Inbox** and click
+   **Try a sample fax → Molina authorization**. Athleone reads it and fills
+   in every field. Show the original on the left, the confidence marks, and
+   the checks: the hospital sample flags its missing authorization and hours.
+   Click **Approve** to create the referral, then **Start Intake**. The
+   Medicaid ID, address and dates are already filled in. **Submit**, and the
+   client appears under Clients. With Google Document AI connected, do the
+   same with a real fax or a phone photo of one.
 3. **Care plan** (`/admin/care-plans`). The authorization with its service
    code, units and approved tasks. This is what the caregiver's checklist and
    the billing lines come from.
@@ -205,7 +210,7 @@ includes reset links and sign-in codes, which lets you test those flows.
 | **DocuSign** | Built and tested end to end in the demo environment; Connect webhook added | The agency's DocuSign account (or yours), go-live review of the integration key, a signed DocuSign BAA before documents with client data are sent |
 | **HHAeXchange (Texas EVV)** | Payload mapping, sender, sandbox mock, export screen built | The agency's HHAeXchange/TMHP provider enrollment and API credentials, then HHAeXchange's certification testing |
 | **Payroll (Gusto Embedded)** | Planned, not built | Gusto partnership |
-| **Fax intake / OCR** | Mock fax viewer only | Fax provider choice (e.g. SRFax/Documo) + OCR vendor with a BAA |
+| **Fax intake / OCR** | Built: Fax Inbox with demo reader + Google Document AI, review & approve (docs/FAX-INTAKE.md) | Google Cloud project + Document AI processor; a HIPAA fax service with a webhook and BAA |
 
 A good ask for the client after the demo: *"To test live, I need: your
 HHAeXchange provider credentials (sandbox first), a DocuSign account user, and
@@ -263,5 +268,5 @@ your OK for Athleone to text your caregivers from our number."*
 - Backups tested with a real restore; an uptime monitor on `/api/health`.
 - An outside security review / penetration test before the first agency
   goes live.
-- Not built yet: fax/OCR intake, Gusto payroll, iPhone app store build (iPhone
+- Not built yet: Gusto payroll, iPhone app store build (iPhone
   users can use Add to Home Screen), push notifications.

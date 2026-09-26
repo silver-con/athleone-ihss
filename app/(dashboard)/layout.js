@@ -2,13 +2,15 @@ import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import { getSession } from "@/lib/auth";
 import { logoutAction } from "@/actions/auth";
+import { countIncomingDocumentsToReview } from "@/lib/queries";
 
 export default async function DashboardLayout({ children }) {
   const session = await getSession();
+  const inbox = session?.organizationId ? await countIncomingDocumentsToReview(session.organizationId) : 0;
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar />
+      <Sidebar badges={{ inbox }} />
       <main className="flex-1 min-w-0 px-10 py-8">
         {session && (
           <div className="flex items-center justify-end gap-3 mb-4 -mt-2">

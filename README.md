@@ -25,6 +25,11 @@ shared browser state.
 - **Phone app?** [`mobile/README.md`](mobile/README.md): install from the website, or build the Android APK on GitHub.
 - **Something broken?** [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
 
+### Added 2026-09-26
+
+- **Fax Inbox** (`/inbox`): faxes arrive by webhook or upload, **Google Document AI** (or a no-account demo reader) fills in the referral, and a coordinator checks it side by side and approves. See [`docs/FAX-INTAKE.md`](docs/FAX-INTAKE.md).
+- The app is now called **Athleone**.
+
 ### Added 2026-09-25
 
 - **Email and SMS**, pluggable. Email: SendGrid, Postmark, Resend or any SMTP. SMS: Twilio. You choose them with environment variables (`.env.production.example`). With no keys, every message is recorded in an outbox (**Admin → Communications**) instead of being sent.
