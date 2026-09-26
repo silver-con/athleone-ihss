@@ -42,8 +42,13 @@ export default async function ReferralDetailPage({ params }) {
             Referral from {referral.payer} · Received {referral.receivedDate}
           </p>
         </div>
-        <span className={'text-[11px] font-display font-bold px-2.5 py-1.5 rounded-full whitespace-nowrap ' + status.className}>
-          {status.label}
+        <span className="flex flex-col items-end gap-1.5">
+          <span className={'text-[11px] font-display font-bold px-2.5 py-1.5 rounded-full whitespace-nowrap ' + status.className}>
+            {status.label}
+          </span>
+          {!referral.authNumber && (
+            <span className="text-[11px] font-display font-bold px-2.5 py-1 rounded-full whitespace-nowrap bg-[oklch(95%_0.05_85)] text-[oklch(42%_0.1_75)]">Awaiting authorization</span>
+          )}
         </span>
       </div>
 
@@ -54,12 +59,32 @@ export default async function ReferralDetailPage({ params }) {
           <dt className="font-bold text-[var(--muted)]">Service</dt>
           <dd>{referral.service}</dd>
           <dt className="font-bold text-[var(--muted)]">Authorization #</dt>
-          <dd>{referral.authNumber}</dd>
+          <dd>{referral.authNumber || '—'}</dd>
           <dt className="font-bold text-[var(--muted)]">Authorized Hours</dt>
-          <dd>{referral.authHours}</dd>
+          <dd>{referral.authHours || '—'}</dd>
+          {referral.fax?.planMemberId && (
+            <>
+              <dt className="font-bold text-[var(--muted)]">Plan member ID</dt>
+              <dd>{referral.fax.planMemberId}</dd>
+            </>
+          )}
           <dt className="font-bold text-[var(--muted)]">Reason</dt>
           <dd>{referral.diagnosis}</dd>
         </dl>
+
+        {Array.isArray(referral.fax?.serviceLines) && referral.fax.serviceLines.length > 1 && (
+          <div className="mt-5 pt-5 border-t border-[var(--border)] text-[12.5px]">
+            <div className="font-display font-bold mb-1.5">Service lines on the fax</div>
+            <ul className="space-y-1">
+              {referral.fax.serviceLines.map((l, i) => (
+                <li key={i}>
+                  {i === (referral.fax.primaryLine || 0) ? <strong>Primary: </strong> : null}
+                  {[[l.serviceCode, l.modifier].filter(Boolean).join(' '), l.serviceType, l.authStart && l.authEnd ? `${l.authStart} – ${l.authEnd}` : null, l.lineStatus].filter(Boolean).join(' · ')}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {referral.fax ? (
           <div className="mt-5 pt-5 border-t border-[var(--border)]">

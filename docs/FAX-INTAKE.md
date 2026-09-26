@@ -55,7 +55,8 @@ exactly these names; Athleone maps them automatically:
 |---|---|---|
 | `client_name` | Plain text | The member / patient / client's full name |
 | `date_of_birth` | Datetime | The member's date of birth |
-| `medicaid_id` | Plain text | Texas Medicaid ID (9 digits); may be labelled Member ID |
+| `medicaid_id` | Plain text | Texas Medicaid ID (9 digits), **only** when printed as a Medicaid ID |
+| `plan_member_id` | Plain text | The health plan's member / subscriber ID (Member ID, Health Plan ID) |
 | `payer_name` | Plain text | Health plan or payer, e.g. Molina, Superior, Amerigroup |
 | `authorization_number` | Plain text | Authorization, referral or prior-auth number |
 | `service_type` | Plain text | Service authorized, e.g. Personal Attendant Services |
@@ -66,7 +67,8 @@ exactly these names; Athleone maps them automatically:
 | `diagnosis` | Plain text | Diagnosis or reason for services |
 | `client_address` | Plain text | The member's home address |
 | `client_phone` | Plain text | The member's phone number |
-| `auth_status` | Plain text | Authorization status: Approved, Pended, Denied |
+| `auth_status` | Plain text | **Overall** authorization status: Approved, Pended, Denied |
+| `line_status` | Plain text | A service line's own status (Line Status column) |
 | `case_id` | Plain text | Payer case ID, e.g. LTSS-######## |
 | `modifier` | Plain text | Service code modifier, e.g. U5 |
 | `units_per_week` | Number | Authorized 15-minute units per week |
@@ -94,7 +96,7 @@ exactly these names; Athleone maps them automatically:
 | `emergency_contact_phone` | Plain text | Emergency contact phone |
 | `emergency_contact_relationship` | Plain text | Emergency contact relationship to the member |
 
-All 40 fields are also in `docs/docai-schema-fields.csv`. `node scripts/docai-set-schema.mjs --apply` adds them all to the processor in one step (it uses your gcloud login). The first 13 fill
+All 42 fields are also in `docs/docai-schema-fields.csv`. `node scripts/docai-set-schema.mjs --apply` adds them all to the processor in one step (it uses your gcloud login). The first 13 fill
 in the referral. The rest fill in the client's **care plan** automatically
 when intake is completed: service code and modifier, hours and units per
 week, dates, status, diagnosis code and approved tasks. The coordinator and
@@ -199,3 +201,33 @@ inbox.
 - **"Try a sample fax"** is available in development. On a production server it
   is off unless `ALLOW_SAMPLE_FAXES=true` (set it on a demo server only; the
   Google Cloud setup script turns it on for a brand-new service).
+
+
+## Document type, IDs and service lines (2026-09-26 update)
+
+- **Document type.** The review screen asks what the document is:
+  - **Authorization notice** needs the authorization #, overall status, start
+    date, and hours or units.
+  - **Referral (no authorization yet)** can be approved without them. It
+    shows as *Awaiting authorization*, and intake asks for the hours later.
+  - If the reader thought it was an authorization, calling it a referral
+    needs a reason, which goes in the Audit Log.
+- **Medicaid ID vs plan member ID.** A plain "Member ID" / "Health Plan ID" goes
+  in **Plan member ID**, never into Medicaid ID. When it's 9 digits, the
+  reviewer can click *Use the plan member ID as the Medicaid ID* after
+  checking; this is audit-logged. A Google `medicaid_id` value that wasn't
+  printed next to the word "Medicaid" is moved to Plan member ID.
+- **Overall vs line status.** The overall status is kept separate from each
+  service line's status.
+  - A denied overall status, or a denied **primary line**, blocks approval.
+  - Pended gives a warning, and the care plan is created as Pending.
+- **Service lines.** Every line found is kept in the extraction and on the
+  referral. Lines come from:
+  - the single fields;
+  - repeated Google values;
+  - a service-code table in the text;
+  - later, a `service_line` parent field in Google.
+
+  The reviewer picks a **primary** line, which fills the form. The care plan
+  is built from the primary line, and the other lines are listed in its
+  notes.

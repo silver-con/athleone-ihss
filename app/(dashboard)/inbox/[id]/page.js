@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth';
 import { hasPermission } from '@/lib/permissions';
 import { getIncomingDocument, findIntakeDuplicates, getOrganization } from '@/lib/queries';
 import ReviewForm from '@/components/intake/ReviewForm';
+import { documentTypeFromClassifier } from '@/lib/docai/fields';
 import RetryButton from '@/components/intake/RetryButton';
 import RejectForm from '@/components/intake/RejectForm';
 
@@ -106,7 +107,17 @@ export default async function ReviewDocumentPage({ params }) {
           )}
 
           {(doc.status === 'needs_review' || approved) && (
-            <ReviewForm documentId={doc.id} initialFields={fields} duplicates={duplicates} readOnly={approved} agency={agency} />
+            <ReviewForm
+              documentId={doc.id}
+              initialFields={fields}
+              duplicates={duplicates}
+              readOnly={approved}
+              agency={agency}
+              readerDocType={doc.docType}
+              initialDocumentType={(approved && doc.extraction?.approvedDocumentType) || doc.extraction?.documentType || documentTypeFromClassifier(doc.docType)}
+              serviceLines={Array.isArray(doc.extraction?.serviceLines) ? doc.extraction.serviceLines : []}
+              initialPrimaryLine={Number(doc.extraction?.primaryLine) || 0}
+            />
           )}
 
           {doc.engine === 'google-docai' && Array.isArray(doc.extraction?.entityTypes) && (

@@ -96,9 +96,9 @@ export default async function FaxPage({ params }) {
             <DetailField label="Member Name" value={referral.clientName} />
             <DetailField label="Date of Birth" value={referral.dob} />
             <DetailField label="Medicaid ID" value={fax.medicaidId} />
-            <DetailField label="Authorization #" value={referral.authNumber} />
+            <DetailField label="Authorization #" value={referral.authNumber || '—'} />
             <DetailField label="Approved Service" value={referral.service} />
-            <DetailField label="Authorized Hours" value={referral.authHours} />
+            <DetailField label="Authorized Hours" value={referral.authHours || '—'} />
             <DetailField label="Effective Dates" value={fax.effectiveDates} />
             <DetailField label="Reason for Referral" value={referral.diagnosis} />
           </div>

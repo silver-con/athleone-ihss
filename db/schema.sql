@@ -199,8 +199,8 @@ CREATE TABLE IF NOT EXISTS referrals (
   client_name     text NOT NULL,
   dob             text NOT NULL,
   service         text NOT NULL,
-  auth_hours      text NOT NULL,
-  auth_number     text NOT NULL,
+  auth_hours      text,          -- empty until the payer authorizes (2026-09-26)
+  auth_number     text,          -- empty until the payer authorizes (2026-09-26)
   diagnosis       text NOT NULL,
   received_date   text NOT NULL,
   status          text NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'in-progress', 'completed')),

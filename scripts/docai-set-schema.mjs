@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Sets all 40 Athleone fields on your Document AI Custom Extractor in one go
+// Sets all 42 Athleone fields on your Document AI Custom Extractor in one go
 // (instead of typing them into the console one by one).
 //
 //   node docai-set-schema.mjs            -> shows what it will do (changes nothing)
@@ -22,7 +22,8 @@ const APPLY = process.argv.includes('--apply');
 const FIELDS = [
   ['client_name', 'string', "Member / patient / client full name (e.g. Member Name). Not the sender, provider agency or coordinator."],
   ['date_of_birth', 'datetime', 'Member date of birth (Member DOB)'],
-  ['medicaid_id', 'string', 'Texas Medicaid ID, 9 digits; may be labelled Member ID or Health Plan ID'],
+  ['medicaid_id', 'string', 'Texas Medicaid ID (9 digits) ONLY when printed as a Medicaid ID. Leave empty if the fax only shows a Member ID or Health Plan ID.'],
+  ['plan_member_id', 'string', "The health plan's own member / subscriber ID (e.g. Member ID, Health Plan ID) when it is not labelled as the Medicaid ID"],
   ['payer_name', 'string', 'Health plan / payer, e.g. Molina Healthcare, Superior HealthPlan, Amerigroup (often only in the letterhead)'],
   ['authorization_number', 'string', 'Authorization / referral / prior-auth number (e.g. Reference#, Auth #)'],
   ['service_type', 'string', 'Service authorized, e.g. Non-Waiver PAS Agency Model, Personal Attendant Services'],
@@ -33,7 +34,8 @@ const FIELDS = [
   ['diagnosis', 'string', 'Diagnosis description or reason for services'],
   ['client_address', 'string', "Member home address including city, state and ZIP"],
   ['client_phone', 'string', "Member phone number (not the payer's, coordinator's or provider's)"],
-  ['auth_status', 'string', 'Authorization / line status, e.g. Approved, Pended, Denied'],
+  ['auth_status', 'string', 'OVERALL authorization decision (Auth Status), e.g. Approved, Pended, Denied. Not a service line\'s status.'],
+  ['line_status', 'string', 'Status of the service line (Line Status column), e.g. Approved, Denied'],
   ['case_id', 'string', 'Payer case ID, e.g. LTSS-########'],
   ['modifier', 'string', 'Service code modifier, e.g. U5 (Modifier 1)'],
   ['units_per_week', 'number', 'Authorized 15-minute units per week (Frequency / Total Units Per Week)'],

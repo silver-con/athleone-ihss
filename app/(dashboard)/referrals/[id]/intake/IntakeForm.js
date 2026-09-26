@@ -40,7 +40,7 @@ export default function IntakeForm({ referral, careNeedOptions, locations = [] }
 
       <h1 className="font-display font-extrabold text-[24px]">Complete Intake — {referral.clientName}</h1>
       <p className="text-[13.5px] text-[var(--muted)] mt-1">
-        Referral from {referral.payer} · Authorization {referral.authNumber}
+        Referral from {referral.payer} · {referral.authNumber ? `Authorization ${referral.authNumber}` : 'No authorization yet'}
       </p>
 
       {/* Filled from the fax when the referral came through the Fax Inbox. */}
@@ -81,8 +81,8 @@ export default function IntakeForm({ referral, careNeedOptions, locations = [] }
         <Grid cols={2}>
           <Field label="Payer Name" name="payerName" defaultValue={referral.payer} />
           <Field label="Medicaid ID (9 digits)" name="memberId" placeholder="Required before EVV visits can be sent" defaultValue={fromFax.medicaidId} />
-          <Field label="Authorization Number" name="authNumber" defaultValue={referral.authNumber} />
-          <Field label="Authorized Hours / Week" name="authHours" defaultValue={referral.authHours} />
+          <Field label="Authorization Number (optional)" name="authNumber" defaultValue={referral.authNumber || ''} />
+          <Field label="Authorized Hours / Week (required)" name="authHours" defaultValue={referral.authHours || ''} placeholder={referral.authHours ? undefined : 'Needed to add the client — ask the payer if unknown'} />
           <Field label="Service Type" name="serviceType" defaultValue={referral.service} />
           <Field label="Effective Dates" name="effectiveDates" defaultValue={fromFax.effectiveDates} />
         </Grid>

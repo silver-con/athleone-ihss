@@ -2,11 +2,12 @@
 
 import { useActionState, useMemo, useState } from 'react';
 import { approveDocumentAction, rejectDocumentAction } from '@/actions/intake';
-import { FIELDS } from '@/lib/docai/fields';
+import { FIELDS, DOCUMENT_TYPES, isRequired } from '@/lib/docai/fields';
+import { LINE_TO_FIELD, fieldsForLine } from '@/lib/docai/service-lines';
 import { validateFields, LOW_CONFIDENCE } from '@/lib/docai/validate';
 
 const GROUPS = [
-  ['Client', ['clientName', 'dob', 'medicaidId', 'phone', 'address', 'primaryLanguage']],
+  ['Client', ['clientName', 'dob', 'medicaidId', 'planMemberId', 'phone', 'address', 'primaryLanguage']],
   ['Referral & provider', ['referralDate', 'dischargeDate', 'servicingProvider', 'providerNpi', 'requestingProvider', 'program']],
   ['Payer & authorization', ['payer', 'authStatus', 'authNumber', 'caseId', 'service', 'serviceCode', 'modifier', 'authHours', 'unitsPerWeek', 'frequencyPeriod', 'totalUnits', 'serviceDays', 'authStart', 'authEnd', 'reviewDate']],
   ['Clinical & care plan', ['diagnosis', 'diagnosisCode', 'approvedTasks', 'backupPlan', 'pcpName', 'pcpPhone', 'pcpFax']],
@@ -27,15 +28,58 @@ function ConfidenceDot({ field }) {
   );
 }
 
-export default function ReviewForm({ documentId, initialFields, duplicates, readOnly, agency = null }) {
+const LINE_FIELD_KEYS = new Set(Object.values(LINE_TO_FIELD));
+
+export default function ReviewForm({
+  documentId,
+  initialFields,
+  duplicates,
+  readOnly,
+  agency = null,
+  initialDocumentType = 'other',
+  readerDocType = null,
+  serviceLines = [],
+  initialPrimaryLine = 0,
+}) {
   const [fields, setFields] = useState(initialFields);
+  const [documentType, setDocumentType] = useState(initialDocumentType);
+  const [primaryLine, setPrimaryLine] = useState(initialPrimaryLine);
+  const [typeReason, setTypeReason] = useState('');
+  const [medicaidFromPlan, setMedicaidFromPlan] = useState(false);
   const [approveState, approve, approving] = useActionState(approveDocumentAction.bind(null, documentId), {});
   const [rejectState, reject, rejecting] = useActionState(rejectDocumentAction.bind(null, documentId), {});
   const [showReject, setShowReject] = useState(false);
-  const issues = useMemo(() => validateFields(fields, { agency }), [fields, agency]);
+  const lineStatus = serviceLines[primaryLine]?.lineStatus || null;
+  const needsTypeReason = readerDocType === 'authorization' && documentType === 'referral';
+  const issues = useMemo(() => {
+    const out = validateFields(fields, { agency, documentType, lineStatus });
+    if (needsTypeReason && !typeReason.trim()) (out.documentType ||= []).push({ level: 'error', message: 'This looks like an authorization notice. Say why you’re treating it as a referral.' });
+    return out;
+  }, [fields, agency, documentType, lineStatus, needsTypeReason, typeReason]);
   const errorCount = Object.values(issues).flat().filter((i) => i.level === 'error').length;
 
-  const set = (key, value) => setFields((f) => ({ ...f, [key]: { ...(f[key] || {}), value, source: 'reviewer' } }));
+  const set = (key, value) => {
+    if (key === 'medicaidId') setMedicaidFromPlan(false);
+    setFields((f) => ({ ...f, [key]: { ...(f[key] || {}), value, source: 'reviewer' } }));
+  };
+  const planId = String(fields.planMemberId?.value || '').replace(/[\s-]/g, '');
+  const canUsePlanId = !readOnly && !String(fields.medicaidId?.value || '').trim() && /^\d{9}$/.test(planId);
+  const usePlanIdAsMedicaid = () => {
+    setFields((f) => ({ ...f, medicaidId: { value: planId, source: 'reviewer', note: 'Confirmed from the plan member ID' } }));
+    setMedicaidFromPlan(true);
+  };
+  const choosePrimary = (i) => {
+    if (i === primaryLine) return;
+    const edited = [...LINE_FIELD_KEYS].some((k) => fields[k]?.source === 'reviewer');
+    if (edited && !window.confirm('Switching the primary line replaces the service, code, hours, units and dates you edited with that line’s values. Continue?')) return;
+    const values = fieldsForLine(serviceLines[i]);
+    setFields((f) => {
+      const next = { ...f };
+      for (const [k, v] of Object.entries(values)) next[k] = v ? { value: v, source: 'line', confidence: serviceLines[i].confidence ?? f[k]?.confidence ?? 0.8, page: serviceLines[i].page ?? null } : undefined;
+      return next;
+    });
+    setPrimaryLine(i);
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -60,6 +104,93 @@ export default function ReviewForm({ documentId, initialFields, duplicates, read
       )}
 
       <form action={approve} className="flex flex-col gap-4">
+        <input type="hidden" name="documentType" value={documentType} />
+        <input type="hidden" name="primaryLine" value={primaryLine} />
+        <input type="hidden" name="medicaidConfirmedFromPlan" value={medicaidFromPlan ? '1' : ''} />
+        <section className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
+          <label className="flex flex-col gap-1">
+            <span className="text-[11.5px] font-display font-bold text-[var(--muted)]">What is this document?</span>
+            <select
+              value={documentType}
+              onChange={(e) => setDocumentType(e.target.value)}
+              disabled={readOnly}
+              className={'border rounded-lg px-3 py-2 text-[13px] bg-white ' + ((issues.documentType || []).some((i) => i.level === 'error') ? 'border-[var(--danger)]' : 'border-[var(--border)]')}
+            >
+              {DOCUMENT_TYPES.map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-[11.5px] text-[var(--muted)] mt-1.5">
+            {documentType === 'authorization'
+              ? 'An authorization notice needs the authorization #, overall status, start date, and hours or units.'
+              : documentType === 'referral'
+                ? 'A referral can be approved without an authorization # or hours. It will show as “Awaiting authorization”; hours are needed before intake.'
+                : 'Not a referral or authorization? Reject it, or enter a referral by hand.'}
+          </p>
+          {needsTypeReason && !readOnly && (
+            <input
+              name="typeChangeReason"
+              value={typeReason}
+              onChange={(e) => setTypeReason(e.target.value)}
+              placeholder="Why is this a referral, not an authorization? (goes in the Audit Log)"
+              className="mt-2 w-full border border-[var(--border)] rounded-lg px-3 py-2 text-[12.5px] bg-white"
+            />
+          )}
+          {(issues.documentType || []).map((i, n) => (
+            <div key={n} className="text-[11.5px] mt-1" style={{ color: i.level === 'error' ? 'var(--danger)' : 'oklch(45% 0.1 75)' }}>
+              {i.message}
+            </div>
+          ))}
+        </section>
+
+        {serviceLines.length > 0 && (
+          <section className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
+            <div className="font-display font-extrabold text-[13.5px] mb-1">Service lines ({serviceLines.length})</div>
+            <p className="text-[11.5px] text-[var(--muted)] mb-3">
+              The primary line fills the service, code, hours, units and dates below. Every line is kept with the referral.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="text-left text-[var(--muted)]">
+                    <th className="py-1 pr-2 font-display">Primary</th>
+                    <th className="py-1 pr-2 font-display">Code</th>
+                    <th className="py-1 pr-2 font-display">Service</th>
+                    <th className="py-1 pr-2 font-display">Hours / units</th>
+                    <th className="py-1 pr-2 font-display">Dates</th>
+                    <th className="py-1 pr-2 font-display">Line status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {serviceLines.map((l, i) => (
+                    <tr key={i} className="border-t border-[var(--border)] align-top">
+                      <td className="py-1.5 pr-2">
+                        <input type="radio" name="primaryLineChoice" checked={primaryLine === i} onChange={() => choosePrimary(i)} disabled={readOnly} aria-label={`Use line ${i + 1} as primary`} />
+                      </td>
+                      <td className="py-1.5 pr-2 whitespace-nowrap">{[l.serviceCode, l.modifier].filter(Boolean).join(' ') || '—'}</td>
+                      <td className="py-1.5 pr-2">{l.serviceType || '—'}</td>
+                      <td className="py-1.5 pr-2 whitespace-nowrap">
+                        {[l.authHours, l.unitsPerWeek ? `${l.unitsPerWeek} units${l.frequencyPeriod ? `/${l.frequencyPeriod.toLowerCase()}` : ''}` : null].filter(Boolean).join(' · ') || '—'}
+                        {l.totalUnits ? <div className="text-[var(--muted)]">total {l.totalUnits}</div> : null}
+                      </td>
+                      <td className="py-1.5 pr-2 whitespace-nowrap">{l.authStart || l.authEnd ? `${l.authStart || '?'} – ${l.authEnd || '?'}` : '—'}</td>
+                      <td className="py-1.5 pr-2">{l.lineStatus || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {(issues.lineStatus || []).map((i, n) => (
+              <div key={n} className="text-[11.5px] mt-2" style={{ color: i.level === 'error' ? 'var(--danger)' : 'oklch(45% 0.1 75)' }}>
+                {i.message}
+              </div>
+            ))}
+          </section>
+        )}
+
         {GROUPS.map(([title, keys]) => (
           <section key={title} className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
             <div className="font-display font-extrabold text-[13.5px] mb-3">{title}</div>
@@ -74,7 +205,7 @@ export default function ReviewForm({ documentId, initialFields, duplicates, read
                     <span className="flex items-center justify-between gap-2">
                       <span className="text-[11.5px] font-display font-bold text-[var(--muted)]">
                         {def.label}
-                        {def.required && <span className="text-[var(--danger)]"> *</span>}
+                        {isRequired(def, documentType) && <span className="text-[var(--danger)]"> *</span>}
                       </span>
                       <ConfidenceDot field={fields[key]} />
                     </span>
@@ -93,6 +224,12 @@ export default function ReviewForm({ documentId, initialFields, duplicates, read
                         {i.message}
                       </span>
                     ))}
+                    {fields[key]?.note && <span className="text-[11.5px] text-[oklch(45%_0.1_75)]">{fields[key].note}</span>}
+                    {key === 'medicaidId' && canUsePlanId && (
+                      <button type="button" onClick={usePlanIdAsMedicaid} className="self-start text-[11.5px] font-display font-bold text-[var(--accent)] underline">
+                        Use the plan member ID ({planId}) as the Medicaid ID — I checked it’s the Medicaid ID
+                      </button>
+                    )}
                   </label>
                 );
               })}

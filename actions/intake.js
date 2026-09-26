@@ -10,7 +10,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePermission } from '@/actions/auth';
 import * as db from '@/lib/queries';
 import { ingestDocument, processDocument } from '@/lib/intake';
-import { FIELDS } from '@/lib/docai/fields';
+import { FIELDS, DOCUMENT_TYPES } from '@/lib/docai/fields';
 import { validateFields, hasBlockingIssues } from '@/lib/docai/validate';
 import { SAMPLE_FAXES, sampleFaxesEnabled } from '@/lib/docai/samples';
 
@@ -73,8 +73,21 @@ export async function approveDocumentAction(documentId, prevState, formData) {
     fields[f.key] = v;
     asFields[f.key] = { value: v, confidence: 1, source: 'reviewer' };
   }
+  const doc = await db.getIncomingDocument(session.organizationId, String(documentId));
+  if (!doc) return { error: 'Document not found.' };
+  const documentType = DOCUMENT_TYPES.some(([k]) => k === formData.get('documentType')) ? String(formData.get('documentType')) : 'other';
+  const lines = Array.isArray(doc.extraction?.serviceLines) ? doc.extraction.serviceLines : [];
+  const primaryLine = Math.min(Math.max(0, parseInt(formData.get('primaryLine') || '0', 10) || 0), Math.max(0, lines.length - 1));
+  const lineStatus = lines[primaryLine]?.lineStatus || null;
+  const typeChangeReason = String(formData.get('typeChangeReason') || '').trim().slice(0, 300);
+  // The reader thought this was an authorization: calling it a referral
+  // (which skips the authorization # and hours) needs a stated reason.
+  if (doc.docType === 'authorization' && documentType === 'referral' && !typeChangeReason) {
+    return { error: 'This looks like an authorization notice. Say why you’re treating it as a referral (it will be in the Audit Log).' };
+  }
+  const medicaidFromPlan = formData.get('medicaidConfirmedFromPlan') === '1' && fields.medicaidId && fields.medicaidId === fields.planMemberId;
   const org = await db.getOrganization(session.organizationId);
-  const issues = validateFields(asFields, { checkConfidence: false, agency: org ? { name: org.name, npi: org.npi || null } : null });
+  const issues = validateFields(asFields, { checkConfidence: false, documentType, lineStatus, agency: org ? { name: org.name, npi: org.npi || null } : null });
   if (hasBlockingIssues(issues)) {
     const first = Object.values(issues).flat().find((i) => i.level === 'error');
     return { error: `Fix the highlighted fields first: ${first.message}`, issues };
@@ -84,6 +97,10 @@ export async function approveDocumentAction(documentId, prevState, formData) {
     referralId = await db.approveIncomingDocument(session.organizationId, String(documentId), {
       fields,
       reviewer: { userId: session.userId, name: session.name },
+      documentType,
+      primaryLine,
+      typeChangeReason: typeChangeReason || null,
+      medicaidConfirmedFromPlan: Boolean(medicaidFromPlan),
     });
   } catch (err) {
     // Only our own, written-for-people messages go back to the browser.
@@ -91,7 +108,9 @@ export async function approveDocumentAction(documentId, prevState, formData) {
     console.error('[intake] approve failed:', err);
     return { error: 'Could not approve this document. Refresh the page and try again.' };
   }
-  await audit(session, 'fax_approved', String(documentId), `referral ${referralId} created for ${fields.clientName}`);
+  await audit(session, 'fax_approved', String(documentId), `referral ${referralId} created (${documentType}${lines.length > 1 ? `, primary service line ${primaryLine + 1} of ${lines.length}` : ''})`);
+  if (typeChangeReason) await audit(session, 'fax_document_type_changed', String(documentId), `read as ${doc.docType}, approved as ${documentType}: ${typeChangeReason.slice(0, 200)}`);
+  if (medicaidFromPlan) await audit(session, 'fax_medicaid_confirmed_from_plan_member_id', String(documentId), 'reviewer confirmed the plan member ID as the Medicaid ID');
   revalidatePath('/inbox');
   revalidatePath('/referrals');
   redirect(`/referrals/${referralId}`);

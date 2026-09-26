@@ -71,7 +71,8 @@ export default async function ReferralsPage() {
               </div>
 
               <div className="text-[12.5px] text-[oklch(45%_0.02_80)] w-[170px] leading-snug">
-                {r.service}<br />{r.authHours}
+                {r.service}<br />
+                {r.authNumber ? r.authHours : <span className="font-display font-bold text-[oklch(42%_0.1_75)]">Awaiting authorization</span>}
               </div>
 
               <div className="text-[12.5px] text-[oklch(45%_0.02_80)] w-[110px] leading-snug">

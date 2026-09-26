@@ -54,7 +54,12 @@ async function run() {
   eq('Molina: procedure code', m.serviceCode, 'S5125 U5');
   eq('Molina: found on page 2 of 2', [molina.fields.clientName.page, molina.pageCount], [2, 2]);
   eq('Molina: classified as an authorization', molina.docType, 'authorization');
-  check('Molina: no blocking problems', !hasBlockingIssues(validateFields(molina.fields)));
+  {
+    const mi = validateFields(molina.fields);
+    const errs = Object.entries(mi).filter(([, l]) => l.some((i) => i.level === 'error')).map(([k]) => k);
+    eq('Molina sample: the only thing to add is the overall status (not printed on it)', errs, ['authStatus']);
+    check('  ...and with it, no blocking problems', !hasBlockingIssues(validateFields({ ...molina.fields, authStatus: { value: 'Approved', confidence: 1, source: 'reviewer' } })));
+  }
 
   const sup = await readDocument(sample('superior-referral-lionel-brooks.pdf'), 'application/pdf');
   eq('Superior: "BROOKS, LIONEL J" becomes "Lionel J Brooks"', sup.fields.clientName.value, 'Lionel J Brooks');
@@ -94,7 +99,7 @@ async function run() {
 
   console.log('\n== validation ==');
   const v = (o) => Object.fromEntries(Object.entries(o).map(([k, val]) => [k, { value: val, confidence: 1, source: 'reviewer' }]));
-  const good = { clientName: 'A B', dob: '01/02/1950', medicaidId: '123456789', payer: 'P', authNumber: 'X', service: 'PAS', authHours: '10 hrs/wk', diagnosis: 'D', authStart: '10/01/2026', authEnd: '03/31/2027' };
+  const good = { clientName: 'A B', dob: '01/02/1950', medicaidId: '123456789', payer: 'P', authNumber: 'X', service: 'PAS', authHours: '10 hrs/wk', diagnosis: 'D', authStart: '10/01/2026', authEnd: '03/31/2027', authStatus: 'Approved' };
   check('a complete referral passes', !hasBlockingIssues(validateFields(v(good), { today: new Date('2026-09-26') })));
   check('8-digit Medicaid ID is an error', validateFields(v({ ...good, medicaidId: '12345678' })).medicaidId?.[0].level === 'error');
   check('DOB in the future is an error', validateFields(v({ ...good, dob: '01/01/2090' })).dob?.[0].level === 'error');
@@ -442,6 +447,94 @@ async function run() {
     const daily = authorizationFromFax({ payer: 'P', service: 'PAS', authHours: '4 hrs/day', authNumber: 'A', diagnosis: 'X', fax: { serviceCode: 'S5125', authStart: '09/01/2026', authEnd: '09/30/2027', unitsPerWeek: '16', frequencyPeriod: 'Day', serviceDays: '7 day plan', backupPlan: 'Informal Support' } }, 'c');
     eq('units per day become units per week in the care plan', [daily.totalUnitsPerWeek, daily.frequency], [112, 'Weekly']);
     check('  ...and schedule and backup plan go in its notes', /Service days: 7 day plan/.test(daily.notes) && /Backup plan: Informal Support/.test(daily.notes) && /16 units per day/.test(daily.notes));
+  }
+
+  console.log('\n== Catalogue update 1: IDs, statuses, referrals without authorization, service lines ==');
+  {
+    const { checkMedicaidProvenance } = await import('./docai/parse.js');
+    const { buildServiceLines, linesFromTable, linesFromEntities, fieldsForLine } = await import('./docai/service-lines.js');
+    const { careStatus, authorizationFromFax } = await import('./fax-authorization.js');
+    const { documentTypeFromClassifier } = await import('./docai/fields.js');
+
+    // 1. Member ID is not the Medicaid ID
+    const t1 = normalizeFields(fieldsFromText('Member ID: 900000123\nMember Name: Pat Example', { confidence: 0.7 }));
+    eq('a plain "Member ID" goes to the plan member ID', [t1.medicaidId?.value, t1.planMemberId?.value], [undefined, '900000123']);
+    const t2 = normalizeFields(fieldsFromText('Health Plan ID: 900000124', { confidence: 0.7 }));
+    eq('"Health Plan ID" too', [t2.medicaidId?.value, t2.planMemberId?.value, t2.payer?.value], [undefined, '900000124', undefined]);
+    const t3 = normalizeFields(fieldsFromText('Member ID (Medicaid): 618-203-554', { confidence: 0.7 }));
+    eq('"Member ID (Medicaid)" is the Medicaid ID, not the plan member ID', [t3.medicaidId?.value, t3.planMemberId?.value], ['618203554', undefined]);
+    const t4 = normalizeFields(fieldsFromEntities([{ type: 'member_id', mentionText: '900000125', confidence: 0.9 }, { type: 'health_plan_id', mentionText: 'x' }]));
+    eq('Google member_id / health_plan_id -> plan member ID', [t4.medicaidId?.value, t4.planMemberId?.value], [undefined, '900000125']);
+    const gtext = 'Health Plan ID: 900000126\nMedicaid ID: 900000127\n';
+    const at = (v) => gtext.indexOf(v);
+    const moved = checkMedicaidProvenance(fieldsFromEntities([{ type: 'medicaid_id', mentionText: '900000126', confidence: 0.9, textAnchor: { textSegments: [{ startIndex: at('900000126') }] } }]), gtext);
+    check('Google medicaid_id printed next to "Health Plan ID" is moved to the plan member ID', !moved.medicaidId && moved.planMemberId?.value === '900000126' && /confirm/i.test(moved.planMemberId.note || ''));
+    const kept = checkMedicaidProvenance(fieldsFromEntities([{ type: 'medicaid_id', mentionText: '900000127', confidence: 0.9, textAnchor: { textSegments: [{ startIndex: at('900000127') }] } }]), gtext);
+    eq('  ...one printed next to "Medicaid ID" stays', kept.medicaidId?.value, '900000127');
+
+    // 2. Overall status vs line status
+    const t5 = normalizeFields(fieldsFromEntities([{ type: 'line_status', mentionText: 'Approved' }, { type: 'status', mentionText: 'Approved' }]));
+    eq('line_status / generic status no longer fill the overall status', t5.authStatus?.value, undefined);
+    const vf = (o) => Object.fromEntries(Object.entries(o).map(([k, x]) => [k, { value: x, confidence: 1 }]));
+    const auth = { clientName: 'A B', dob: '01/01/1950', payer: 'P', authNumber: 'X1', service: 'PAS', authHours: '10 hrs/wk', diagnosis: 'D', authStart: '10/01/2026', authStatus: 'Approved' };
+    const o = { checkConfidence: false, today: new Date('2026-09-26') };
+    check('a denied primary line blocks approval', (validateFields(vf(auth), { ...o, lineStatus: 'Denied' }).lineStatus || []).some((i) => i.level === 'error'));
+    check('a pended primary line warns', (validateFields(vf(auth), { ...o, lineStatus: 'Pended' }).lineStatus || []).some((i) => i.level === 'warn'));
+    const noOverall = validateFields(vf({ ...auth, authStatus: '' }), { ...o, lineStatus: 'Approved' });
+    check('overall status missing is NOT filled from the line — it is required, with a hint', (noOverall.authStatus || []).some((i) => i.level === 'error') && (noOverall.authStatus || []).some((i) => /selected line says/.test(i.message)));
+    eq('care-plan status: the stricter of overall and line', [careStatus('Approved', 'Approved'), careStatus('Approved', 'Pended'), careStatus('Approved', null), careStatus('Pended', 'Approved')], ['approved', 'pending', 'approved', 'pending']);
+
+    // 3. Referrals without an authorization
+    const ref = { clientName: 'A B', dob: '01/01/1950', payer: 'P', service: 'Personal care', diagnosis: 'D', authHours: 'TBD by health plan' };
+    check('a referral passes without authorization # or hours', !hasBlockingIssues(validateFields(vf(ref), { ...o, documentType: 'referral' })));
+    check('  ..."TBD" hours is only a warning on a referral', (validateFields(vf(ref), { ...o, documentType: 'referral' }).authHours || []).every((i) => i.level === 'warn'));
+    check('the same document as an authorization is blocked', hasBlockingIssues(validateFields(vf(ref), { ...o, documentType: 'authorization' })));
+    check('an authorization with units but no hours passes', !hasBlockingIssues(validateFields(vf({ ...auth, authHours: '', unitsPerWeek: '40' }), o)));
+    check('"Other" can\'t be approved', (validateFields(vf(auth), { ...o, documentType: 'other' }).documentType || []).some((i) => i.level === 'error'));
+    eq('reader guess -> default type', ['authorization', 'discharge referral', 'referral', 'other'].map(documentTypeFromClassifier), ['authorization', 'referral', 'referral', 'other']);
+
+    const hosp = await ingestDocument({ organizationId: ORG, buffer: Buffer.concat([sample('hospital-discharge-incomplete.pdf'), Buffer.from('\n%cat1\n')]), source: 'upload' });
+    await processDocument(ORG, hosp.id);
+    const hd = await db.getIncomingDocument(ORG, hosp.id);
+    eq('the hospital fax defaults to "referral"', hd.extraction.documentType, 'referral');
+    const hf = Object.fromEntries(Object.entries(hd.extraction.fields).map(([k, x]) => [k, x.value]));
+    await throws('as an authorization it still needs the authorization #', () => db.approveIncomingDocument(ORG, hosp.id, { fields: hf, reviewer: { name: 'QA' }, documentType: 'authorization' }), 'authNumber');
+    const hrid = await db.approveIncomingDocument(ORG, hosp.id, { fields: hf, reviewer: { name: 'QA' }, documentType: 'referral' });
+    const hr = await db.getReferral(ORG, hrid);
+    eq('approved as a referral with no authorization # or hours', [hr.authNumber, hr.authHours, hr.fax.documentType], [null, null, 'referral']);
+    await throws('intake without hours is refused with a clear message', () => db.submitIntake(ORG, hrid, { clientName: 'Gloria Tran', dob: '07/02/1938', authHours: '', careNeeds: [] }), 'authorized hours');
+    const hr2 = await db.getReferral(ORG, hrid);
+    eq('  ...and the referral is left untouched', hr2.status, 'new');
+    const nullRef = await queryOne('SELECT auth_number FROM referrals WHERE id = $1', [hrid]);
+    eq('  ...stored as NULL (the migration allowed it)', nullRef.auth_number, null);
+
+    // 4. Service lines
+    const tbl = linesFromTable('S5125 ATTENDANT CARE SERVICES; PER 15 MINUTES 2,555 116 Unit Week U5 09/01/2026 09/30/2027 Approved\nT1019 PERSONAL CARE 100 10 Unit Week U6 10/01/2026 12/31/2026 Denied');
+    eq('table rows become lines', tbl.map((l) => [l.serviceCode, l.modifier, l.unitsPerWeek, l.totalUnits, l.frequencyPeriod, l.authStart, l.authEnd, l.lineStatus]),
+      [['S5125', 'U5', '116', '2555', 'Week', '09/01/2026', '09/30/2027', 'Approved'], ['T1019', 'U6', '10', '100', 'Week', '10/01/2026', '12/31/2026', 'Denied']]);
+    const rep = linesFromEntities([{ type: 'procedure_code', mentionText: 'S5125' }, { type: 'procedure_code', mentionText: 'S5150' }, { type: 'units_per_week', mentionText: '116' }, { type: 'units_per_week', mentionText: '8' }]);
+    eq('a field Google returns twice becomes a second line', [rep.first.serviceCode, rep.extra.map((l) => [l.serviceCode, l.unitsPerWeek])], ['S5125', [['S5150', '8']]]);
+    const par = linesFromEntities([{ type: 'service_line', properties: [{ type: 'service_code', mentionText: 'S5125 U5' }, { type: 'line_status', mentionText: 'APPROVED' }] }, { type: 'service_line', properties: [{ type: 'service_code', mentionText: 'S5150' }] }]);
+    eq('future service_line parent fields are read as lines', par.parents.map((l) => [l.serviceCode, l.modifier || null, l.lineStatus || null]), [['S5125', 'U5', 'Approved'], ['S5150', null, null]]);
+    const fields1 = { service: { value: 'ATTENDANT CARE SERVICES' }, serviceCode: { value: 'S5125 U5' }, unitsPerWeek: { value: '116' }, authStart: { value: '09/01/2026' }, authEnd: { value: '09/30/2027' } };
+    const lines = buildServiceLines({ fields: fields1, text: 'S5125 ATTENDANT CARE SERVICES; PER 15 MINUTES 2,555 116 Unit Week U5 09/01/2026 09/30/2027 Approved\nT1019 PERSONAL CARE 100 10 Unit Week U6 10/01/2026 12/31/2026 Denied' });
+    eq('line 1 = the single fields, gaps filled from the matching table row; line 2 kept', [lines.length, lines[0].serviceCode, lines[0].lineStatus, lines[0].totalUnits, lines[1].serviceCode, lines[1].lineStatus], [2, 'S5125', 'Approved', '2555', 'T1019', 'Denied']);
+    eq('choosing a line fills the review form', fieldsForLine(lines[1]).serviceCode, 'T1019');
+
+    // approval keeps every line; the primary takes the reviewer's values
+    const two = await ingestDocument({ organizationId: ORG, buffer: Buffer.concat([sample('molina-authorization-rosa-delgado.pdf'), Buffer.from('\n%cat2\n')]), source: 'upload' });
+    await processDocument(ORG, two.id);
+    await query(`UPDATE incoming_documents SET extraction = jsonb_set(extraction, '{serviceLines}', $3::jsonb) WHERE organization_id = $1 AND id = $2`, [ORG, two.id, JSON.stringify([
+      { serviceCode: 'S5125', modifier: 'U5', unitsPerWeek: '72', authStart: '10/01/2026', authEnd: '03/31/2027', lineStatus: 'Approved' },
+      { serviceCode: 'S5150', unitsPerWeek: '8', authStart: '10/01/2026', authEnd: '03/31/2027', lineStatus: 'Approved' },
+    ])]);
+    const td = await db.getIncomingDocument(ORG, two.id);
+    const tf = { ...Object.fromEntries(Object.entries(td.extraction.fields).map(([k, x]) => [k, x.value])), authStatus: 'Approved', serviceCode: 'S5150', unitsPerWeek: '8', modifier: '' };
+    const trid = await db.approveIncomingDocument(ORG, two.id, { fields: tf, reviewer: { name: 'QA' }, documentType: 'authorization', primaryLine: 1 });
+    const tr = await db.getReferral(ORG, trid);
+    eq('both lines are kept on the referral, line 2 as primary', [tr.fax.serviceLines.length, tr.fax.primaryLine, tr.fax.serviceLines[1].serviceCode, tr.fax.serviceLines[1].reviewed, tr.fax.serviceLines[0].serviceCode], [2, 1, 'S5150', true, 'S5125']);
+    const cp = authorizationFromFax(tr, 'c-x');
+    check('the care plan comes from the primary line and lists the other one', cp.serviceCode === 'S5150' && /1 other service line/.test(cp.notes) && /S5125 U5/.test(cp.notes), cp.notes);
   }
 
   console.log('\n== Hardening (after review) ==');
