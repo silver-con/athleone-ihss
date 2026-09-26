@@ -398,6 +398,19 @@ async function run() {
     eq('  ...stored for the new client', [sa?.client_id, sa?.service_code, sa?.modifier_codes, Number(sa?.total_units_per_week), sa?.start_date, sa?.status, sa?.purchased_tasks], [res.clientId, 'S5125', 'U5', 116, '2026-09-01', 'approved', ['Bathing', 'Dressing']]);
   }
 
+  console.log('\n== Google page breaks (cover sheet on page 1) ==');
+  {
+    const { pagedText } = await import('./docai/google.js');
+    const t = 'Fax Coversheet\nPhone: (800) 555-0100\nMember Phone: (214) 555-0199\n';
+    const cut = t.indexOf('Member');
+    const doc = { text: t, pages: [{ layout: { textAnchor: { textSegments: [{ startIndex: 0, endIndex: cut }] } } }, { layout: { textAnchor: { textSegments: [{ startIndex: cut, endIndex: t.length }] } } }] };
+    const pt = pagedText(doc);
+    check('pages are separated with form feeds', pt.split('\f').length === 2);
+    const gf = normalizeFields(fieldsFromText(pt, { confidence: 0.7 }));
+    eq('  ...so the cover sheet phone is skipped', [gf.phone?.value, gf.phone?.page], ['(214) 555-0199', 2]);
+    eq('a one-page document keeps its text as is', pagedText({ text: 'abc', pages: [{}] }), 'abc');
+  }
+
   console.log('\n== Hardening (after review) ==');
   // Two deliveries of the same fax at the same moment -> one row.
   const raceBuf = Buffer.concat([sample('molina-authorization-rosa-delgado.pdf'), Buffer.from('\n%race-test\n')]);
