@@ -2,7 +2,7 @@
 // field mapping, validation, the store -> read -> review -> approve pipeline,
 // duplicates, tenant isolation, and the Google Document AI / Cloud Storage /
 // Google sign-in code paths (with a fake fetch — Google is never called).
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
@@ -269,6 +269,32 @@ async function run() {
   await throws('a key trying to escape the folder is refused', () => putFile('org-1/../../etc/passwd', Buffer.from('x'), 'text/plain'), 'Bad storage key');
   await throws('gcs without a bucket is refused', () => putFile('a/b.pdf', Buffer.from('x'), 'application/pdf', { env: { STORAGE_DRIVER: 'gcs' } }), 'GCS_BUCKET');
   await throws('  ...also for downloads', () => getFile('a/b.pdf', { env: { STORAGE_DRIVER: 'gcs' } }), 'GCS_BUCKET');
+
+  console.log('\n== Personal gcloud login (no key file) ==');
+  {
+    const dir = mkdtempSync(path.join(tmpdir(), 'athleone-gcloud-'));
+    writeFileSync(path.join(dir, 'application_default_credentials.json'), JSON.stringify({ type: 'authorized_user', client_id: 'cid', client_secret: 'csec', refresh_token: 'rtok-12345678', quota_project_id: 'quota-proj' }));
+    const uenv = { CLOUDSDK_CONFIG: dir, GOOGLE_CLOUD_PROJECT: 'athleone', DOCAI_PROVIDER: 'google', DOCAI_PROCESSOR_ID: 'proc1', DOCAI_LOCATION: 'us' };
+    const calls = [];
+    const ufetch = async (url, init = {}) => {
+      calls.push({ url, init });
+      if (url.includes('oauth2')) return Response.json({ access_token: 'user-token', expires_in: 3600 });
+      return Response.json({ document: { text: 'Member Name: Test Person\n', entities: [{ type: 'client_name', mentionText: 'Test Person', confidence: 0.95 }], pages: [{ pageNumber: 1 }] } });
+    };
+    clearGoogleTokenCache();
+    const { googleCredentialSource } = await import('./google-auth.js');
+    check('the gcloud login file is found', googleCredentialSource(uenv).includes('gcloud login'), googleCredentialSource(uenv));
+    const ur = await extractWithGoogle(Buffer.from('%PDF-1.4 x'), 'application/pdf', { fetchImpl: ufetch, env: uenv });
+    const tok = calls.find((c) => c.url.includes('oauth2'));
+    check('  ...signs in with the refresh token', String(tok?.init?.body).includes('grant_type=refresh_token'));
+    const api = calls.find((c) => c.url.includes('documentai'));
+    eq('  ...calls Document AI with the user token', api?.init?.headers?.Authorization, 'Bearer user-token');
+    eq('  ...and names the project to bill', api?.init?.headers?.['x-goog-user-project'], 'athleone');
+    check('  ...and reads the fields', JSON.stringify(ur).includes('Test Person'));
+    const onRun = { ...uenv, K_SERVICE: 'athleone' };
+    check('on Cloud Run a stray login file is ignored', googleCredentialSource(onRun).includes('metadata'));
+    clearGoogleTokenCache();
+  }
 
   console.log('\n== Hardening (after review) ==');
   // Two deliveries of the same fax at the same moment -> one row.

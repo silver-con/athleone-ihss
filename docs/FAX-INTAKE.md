@@ -78,20 +78,35 @@ Copy the **Processor ID** from the processor's details page.
 
 ### 2. Settings
 
-On your Mac (`.env`), use a service-account key with the role
-**Document AI API User**. Keep the key file outside the project folder:
+**On your Mac, use your own Google login. No key file is needed.** Many
+Google organizations block service-account keys by default
+(`iam.disableServiceAccountKeyCreation`), and that's the safer setup anyway.
+Install the gcloud CLI (`brew install --cask google-cloud-sdk`), then:
+
+```bash
+gcloud auth application-default login          # opens the browser; sign in
+gcloud auth application-default set-quota-project your-project-id
+```
+
+Your Google account needs **Document AI API User** (a project Owner already
+has it). Then add these lines to `.env`:
 
 ```bash
 DOCAI_PROVIDER=google
 GOOGLE_CLOUD_PROJECT=your-project-id
 DOCAI_LOCATION=us
 DOCAI_PROCESSOR_ID=abcdef1234567890
-GOOGLE_APPLICATION_CREDENTIALS=/Users/najam/PrivateKeys/athleone-docai.json
 ```
 
-On Google Cloud Run you leave out `GOOGLE_APPLICATION_CREDENTIALS`: the
-service's own identity is used, and there's no key file at all. See
-`deploy/DEPLOY-GOOGLE-CLOUD.md`.
+Athleone finds the login automatically
+(`~/.config/gcloud/application_default_credentials.json`).
+
+If you do have a service-account key, set
+`GOOGLE_APPLICATION_CREDENTIALS=/Users/najam/PrivateKeys/athleone-docai.json`
+instead, and keep the file outside the project folder.
+
+On Google Cloud Run you need neither: the service's own identity is used.
+See `deploy/DEPLOY-GOOGLE-CLOUD.md`.
 
 Restart `npm run dev`. The Fax Inbox banner changes to **Google Document
 AI**. Upload a real fax (a photo taken on your phone works too) and check the
