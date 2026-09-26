@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { hasPermission } from '@/lib/permissions';
-import { getIncomingDocument, findIntakeDuplicates } from '@/lib/queries';
+import { getIncomingDocument, findIntakeDuplicates, getOrganization } from '@/lib/queries';
 import ReviewForm from '@/components/intake/ReviewForm';
 import RetryButton from '@/components/intake/RetryButton';
 import RejectForm from '@/components/intake/RejectForm';
@@ -27,6 +27,8 @@ export default async function ReviewDocumentPage({ params }) {
     doc.status === 'needs_review'
       ? await findIntakeDuplicates(session.organizationId, { medicaidId: v('medicaidId'), clientName: v('clientName'), dob: v('dob'), authNumber: v('authNumber') })
       : { clients: [], referrals: [] };
+  const org = await getOrganization(session.organizationId);
+  const agency = org ? { name: org.name, npi: org.npi || null } : null;
   const fileUrl = `/inbox/${doc.id}/file`;
   const isImage = doc.mimeType.startsWith('image/') && doc.mimeType !== 'image/tiff';
 
@@ -104,7 +106,7 @@ export default async function ReviewDocumentPage({ params }) {
           )}
 
           {(doc.status === 'needs_review' || approved) && (
-            <ReviewForm documentId={doc.id} initialFields={fields} duplicates={duplicates} readOnly={approved} />
+            <ReviewForm documentId={doc.id} initialFields={fields} duplicates={duplicates} readOnly={approved} agency={agency} />
           )}
 
           {doc.engine === 'google-docai' && Array.isArray(doc.extraction?.entityTypes) && (

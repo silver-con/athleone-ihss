@@ -6,10 +6,12 @@ import { FIELDS } from '@/lib/docai/fields';
 import { validateFields, LOW_CONFIDENCE } from '@/lib/docai/validate';
 
 const GROUPS = [
-  ['Client', ['clientName', 'dob', 'medicaidId', 'phone', 'address']],
-  ['Payer & authorization', ['payer', 'authStatus', 'authNumber', 'caseId', 'service', 'serviceCode', 'modifier', 'authHours', 'unitsPerWeek', 'totalUnits', 'authStart', 'authEnd', 'reviewDate']],
-  ['Clinical & care plan', ['diagnosis', 'diagnosisCode', 'approvedTasks', 'pcpName', 'pcpPhone']],
+  ['Client', ['clientName', 'dob', 'medicaidId', 'phone', 'address', 'primaryLanguage']],
+  ['Referral & provider', ['referralDate', 'dischargeDate', 'servicingProvider', 'providerNpi', 'requestingProvider', 'program']],
+  ['Payer & authorization', ['payer', 'authStatus', 'authNumber', 'caseId', 'service', 'serviceCode', 'modifier', 'authHours', 'unitsPerWeek', 'frequencyPeriod', 'totalUnits', 'serviceDays', 'authStart', 'authEnd', 'reviewDate']],
+  ['Clinical & care plan', ['diagnosis', 'diagnosisCode', 'approvedTasks', 'backupPlan', 'pcpName', 'pcpPhone', 'pcpFax']],
   ['Payer service coordinator', ['coordinatorName', 'coordinatorPhone', 'coordinatorEmail']],
+  ['Emergency contact', ['ecName', 'ecRelationship', 'ecPhone']],
 ];
 const WIDE = new Set(['diagnosis', 'address', 'approvedTasks', 'service']);
 
@@ -25,12 +27,12 @@ function ConfidenceDot({ field }) {
   );
 }
 
-export default function ReviewForm({ documentId, initialFields, duplicates, readOnly }) {
+export default function ReviewForm({ documentId, initialFields, duplicates, readOnly, agency = null }) {
   const [fields, setFields] = useState(initialFields);
   const [approveState, approve, approving] = useActionState(approveDocumentAction.bind(null, documentId), {});
   const [rejectState, reject, rejecting] = useActionState(rejectDocumentAction.bind(null, documentId), {});
   const [showReject, setShowReject] = useState(false);
-  const issues = useMemo(() => validateFields(fields), [fields]);
+  const issues = useMemo(() => validateFields(fields, { agency }), [fields, agency]);
   const errorCount = Object.values(issues).flat().filter((i) => i.level === 'error').length;
 
   const set = (key, value) => setFields((f) => ({ ...f, [key]: { ...(f[key] || {}), value, source: 'reviewer' } }));

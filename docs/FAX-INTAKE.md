@@ -79,8 +79,22 @@ exactly these names; Athleone maps them automatically:
 | `service_coordinator_email` | Plain text | Service coordinator email |
 | `pcp_name` | Plain text | Primary care physician |
 | `pcp_phone` | Plain text | Primary care physician phone |
+| `pcp_fax` | Plain text | Primary care physician fax |
+| `referral_date` | Datetime | Date the referral / service request was made or faxed (Service Request Date) |
+| `discharge_date` | Datetime | Hospital discharge date, if this is a discharge referral |
+| `servicing_provider` | Plain text | Home-care agency the authorization is for (Servicing Provider / Provider Name) |
+| `provider_npi` | Plain text | Servicing provider NPI (10 digits); may be labelled Provider NPI/TIN |
+| `requesting_provider` | Plain text | Requesting / referring provider or referral source |
+| `program` | Plain text | Medicaid program, e.g. STAR+PLUS, STAR Kids, CLASS, Non-Waiver PAS |
+| `frequency_period` | Plain text | The period the units are per: Week, Day or Month (Frequency Period) |
+| `service_days` | Plain text | Service days or schedule, e.g. 7 day plan, Mon-Fri |
+| `backup_plan` | Plain text | Backup service provider / backup plan, e.g. Informal Support |
+| `primary_language` | Plain text | Member's preferred or primary language |
+| `emergency_contact_name` | Plain text | Emergency contact or responsible party name |
+| `emergency_contact_phone` | Plain text | Emergency contact phone |
+| `emergency_contact_relationship` | Plain text | Emergency contact relationship to the member |
 
-All 26 fields are also in `docs/docai-schema-fields.csv`. The first 13 fill
+All 40 fields are also in `docs/docai-schema-fields.csv`. `node scripts/docai-set-schema.mjs --apply` adds them all to the processor in one step (it uses your gcloud login). The first 13 fill
 in the referral. The rest fill in the client's **care plan** automatically
 when intake is completed: service code and modifier, hours and units per
 week, dates, status, diagnosis code and approved tasks. The coordinator and
@@ -88,7 +102,11 @@ PCP details go in the care plan's notes and the intake form. The review
 screen warns when:
 - units per week don't match the hours;
 - the total units don't match units × weeks;
-- the payer denied the authorization. This blocks approval.
+- the payer denied the authorization. This blocks approval;
+- the servicing provider or its NPI isn't your agency's (a fax sent to the
+  wrong agency), or the NPI's check digit is wrong.
+
+Language and the emergency contact prefill the intake form.
 
 Then use the processor's **test** screen on a few real faxes (the sample
 faxes work too), and **deploy/set a default version** if the console asks.

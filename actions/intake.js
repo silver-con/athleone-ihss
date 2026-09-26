@@ -73,7 +73,8 @@ export async function approveDocumentAction(documentId, prevState, formData) {
     fields[f.key] = v;
     asFields[f.key] = { value: v, confidence: 1, source: 'reviewer' };
   }
-  const issues = validateFields(asFields, { checkConfidence: false });
+  const org = await db.getOrganization(session.organizationId);
+  const issues = validateFields(asFields, { checkConfidence: false, agency: org ? { name: org.name, npi: org.npi || null } : null });
   if (hasBlockingIssues(issues)) {
     const first = Object.values(issues).flat().find((i) => i.level === 'error');
     return { error: `Fix the highlighted fields first: ${first.message}`, issues };

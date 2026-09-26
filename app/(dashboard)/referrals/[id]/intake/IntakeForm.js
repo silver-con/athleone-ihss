@@ -49,7 +49,7 @@ export default function IntakeForm({ referral, careNeedOptions, locations = [] }
           <Field label="Full Name" name="clientName" defaultValue={referral.clientName} />
           <Field label="Date of Birth" name="dob" defaultValue={referral.dob} />
           <Field label="Phone" name="phone" placeholder="(   ) ___-____" defaultValue={fromFax.phone} />
-          <Field label="Preferred Language" name="language" defaultValue="English" />
+          <Field label="Preferred Language" name="language" defaultValue={fax.language || 'English'} />
           <Field label="Street Address" name="address" full defaultValue={fromFax.street} />
           <Field label="City" name="city" defaultValue={fromFax.city} />
           <Field label="State" name="state" defaultValue={fromFax.state || 'TX'} />
@@ -90,9 +90,9 @@ export default function IntakeForm({ referral, careNeedOptions, locations = [] }
 
       <Section title="Emergency Contact">
         <Grid cols={3}>
-          <Field label="Name" name="ecName" />
-          <Field label="Relationship" name="ecRelationship" />
-          <Field label="Phone" name="ecPhone" placeholder="(   ) ___-____" />
+          <Field label="Name" name="ecName" defaultValue={fax.emergencyContact?.name || ''} />
+          <Field label="Relationship" name="ecRelationship" defaultValue={fax.emergencyContact?.relationship || ''} />
+          <Field label="Phone" name="ecPhone" placeholder="(   ) ___-____" defaultValue={fax.emergencyContact?.phone || ''} />
         </Grid>
       </Section>
 

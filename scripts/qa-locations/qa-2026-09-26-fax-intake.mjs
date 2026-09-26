@@ -411,6 +411,39 @@ async function run() {
     eq('a one-page document keeps its text as is', pagedText({ text: 'abc', pages: [{}] }), 'abc');
   }
 
+  console.log('\n== Referral, provider, schedule and contact fields (fictional values) ==');
+  {
+    const { validNpi } = await import('./docai/validate.js');
+    const { authorizationFromFax } = await import('./fax-authorization.js');
+    const page = [
+      'Service Request Date: 09/03/2026', 'Discharge date: 09/27/2026', 'Servicing Provider: SAMPLE HOME CARE LLC',
+      'Provider NPI/TIN', '1234567893', 'Requesting Provider: County Hospital', 'Program Name: STAR+PLUS',
+      'Frequency Period: Week', 'Service Days: 7 day plan', 'Backup Service Provider', 'Informal Support',
+      'Preferred Language: Spanish', 'Emergency Contact: Maria Example', 'Relationship: Daughter', 'Emergency Phone: 214-555-0100',
+      'PCP Fax: 214 555 0111',
+    ].join('\n');
+    const pf = normalizeFields(fieldsFromText(page, { confidence: 0.7 }));
+    eq('referral and provider fields are read', [pf.referralDate?.value, pf.dischargeDate?.value, pf.servicingProvider?.value, pf.providerNpi?.value, pf.requestingProvider?.value, pf.program?.value],
+      ['09/03/2026', '09/27/2026', 'SAMPLE HOME CARE LLC', '1234567893', 'County Hospital', 'STAR+PLUS']);
+    eq('schedule, backup and contact fields are read', [pf.frequencyPeriod?.value, pf.serviceDays?.value, pf.backupPlan?.value, pf.primaryLanguage?.value, pf.ecName?.value, pf.ecRelationship?.value, pf.ecPhone?.value, pf.pcpFax?.value],
+      ['Week', '7 day plan', 'Informal Support', 'Spanish', 'Maria Example', 'Daughter', '(214) 555-0100', '(214) 555-0111']);
+    eq('NPI check digit', [validNpi('1234567893'), validNpi('1234567890')], [true, false]);
+    const vf = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { value: v, confidence: 1 }]));
+    const base = { clientName: 'A B', dob: '01/01/1950', payer: 'Molina', authNumber: 'X1', service: 'PAS', authHours: '29 hrs/wk', diagnosis: 'HTN', authStart: '09/01/2026', authEnd: '09/30/2027' };
+    const opts = { checkConfidence: false, today: new Date('2026-09-26'), agency: { name: 'Sunrise Home Care (Demo)', npi: '1234567893' } };
+    const wrong = validateFields(vf({ ...base, servicingProvider: 'OTHER AGENCY LLC' }), opts);
+    check('a fax for a different agency is flagged', (wrong.servicingProvider || []).some((i) => i.level === 'warn'));
+    const right = validateFields(vf({ ...base, servicingProvider: 'SUNRISE HOME CARE LLC', providerNpi: '1234567893' }), opts);
+    check('  ...and your own agency is not', !right.servicingProvider && !right.providerNpi);
+    const otherNpi = validateFields(vf({ ...base, providerNpi: '1245319599' }), opts);
+    check('a different valid NPI is flagged', (otherNpi.providerNpi || []).some((i) => /isn|but your agency/.test(i.message)), JSON.stringify(otherNpi.providerNpi));
+    const disc = validateFields(vf({ ...base, dischargeDate: '09/20/2026', authStart: '09/01/2026' }), opts);
+    check('an authorization starting before discharge is flagged', (disc.authStart || []).some((i) => /discharge/.test(i.message)));
+    const daily = authorizationFromFax({ payer: 'P', service: 'PAS', authHours: '4 hrs/day', authNumber: 'A', diagnosis: 'X', fax: { serviceCode: 'S5125', authStart: '09/01/2026', authEnd: '09/30/2027', unitsPerWeek: '16', frequencyPeriod: 'Day', serviceDays: '7 day plan', backupPlan: 'Informal Support' } }, 'c');
+    eq('units per day become units per week in the care plan', [daily.totalUnitsPerWeek, daily.frequency], [112, 'Weekly']);
+    check('  ...and schedule and backup plan go in its notes', /Service days: 7 day plan/.test(daily.notes) && /Backup plan: Informal Support/.test(daily.notes) && /16 units per day/.test(daily.notes));
+  }
+
   console.log('\n== Hardening (after review) ==');
   // Two deliveries of the same fax at the same moment -> one row.
   const raceBuf = Buffer.concat([sample('molina-authorization-rosa-delgado.pdf'), Buffer.from('\n%race-test\n')]);
