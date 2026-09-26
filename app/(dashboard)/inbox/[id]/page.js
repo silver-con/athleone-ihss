@@ -107,6 +107,29 @@ export default async function ReviewDocumentPage({ params }) {
             <ReviewForm documentId={doc.id} initialFields={fields} duplicates={duplicates} readOnly={approved} />
           )}
 
+          {doc.engine === 'google-docai' && Array.isArray(doc.extraction?.entityTypes) && (
+            <details className="mt-4 bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4" open={!doc.extraction.entityTypes.some((e) => e.field)}>
+              <summary className="cursor-pointer font-display font-bold text-[12.5px]">
+                Fields Google returned ({doc.extraction.entityTypes.filter((e) => e.field).length} used of {doc.extraction.entityTypes.length})
+              </summary>
+              {doc.extraction.entityTypes.length === 0 ? (
+                <p className="mt-2 text-[12.5px]">
+                  Google returned <strong>no fields</strong>. Everything above came from Athleone reading the printed labels. In Document AI, check the
+                  processor&rsquo;s schema has fields saved and a version is deployed and set as default (docs/FAX-INTAKE.md).
+                </p>
+              ) : (
+                <ul className="mt-2 text-[12.5px] space-y-0.5">
+                  {doc.extraction.entityTypes.map((e) => (
+                    <li key={e.name}>
+                      <code>{e.name}</code> {e.field ? '→ used' : <span className="text-[var(--danger)]">→ not a name Athleone knows (rename it in the schema)</span>}
+                      {!e.withValue && ' · empty'}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </details>
+          )}
+
           {doc.rawText && (
             <details className="mt-4 bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4">
               <summary className="cursor-pointer font-display font-bold text-[12.5px]">Text read from the document</summary>

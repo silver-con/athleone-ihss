@@ -14,7 +14,7 @@ for (const k of ['DOCAI_PROVIDER', 'GOOGLE_CLOUD_PROJECT', 'DOCAI_PROCESSOR_ID',
 const db = await import('./queries.js');
 const { query, queryOne, pool } = await import('./db.js');
 const { readDocument, docaiStatus } = await import('./docai/index.js');
-const { fieldsFromEntities, fieldsFromText, formFieldLines, normalizeName, normalizeHours, normalizeDate, classifyDocument } = await import('./docai/parse.js');
+const { fieldsFromEntities, fieldsFromText, formFieldLines, normalizeName, normalizeHours, normalizeDate, normalizeFields, classifyDocument } = await import('./docai/parse.js');
 const { validateFields, hasBlockingIssues } = await import('./docai/validate.js');
 const { extractWithGoogle, processUrl, googleDocaiConfig } = await import('./docai/google.js');
 const { getGoogleAccessToken, clearGoogleTokenCache } = await import('./google-auth.js');
@@ -317,6 +317,39 @@ async function run() {
     clearGoogleTokenCache();
     await throws('Google\'s explanation is shown to the reviewer', () => extractWithGoogle(Buffer.from('%PDF'), 'application/pdf', { fetchImpl: efetch, env: menv }), 'no deployed version');
     clearGoogleTokenCache();
+  }
+
+  console.log('\n== Real-world layouts (Molina-style authorization, fictional values) ==');
+  {
+    const { entitySummary, normalizeEntityType } = await import('./docai/parse.js');
+    eq('schema names are matched loosely', ['Client Name', 'date-of-birth', 'Referral/medicaidId'].map(normalizeEntityType), ['client_name', 'date_of_birth', 'medicaid_id']);
+    const nested = [{ type: 'referral', properties: [
+      { type: 'Client Name', mentionText: 'DOE, JANE Q', confidence: 0.91 },
+      { type: 'date_of_birth', mentionText: 'March 3, 1941', normalizedValue: { dateValue: { year: 1941, month: 3, day: 3 } }, confidence: 0.9 },
+      { type: 'member_dob_extra', mentionText: 'x' },
+    ] }];
+    const nf = normalizeFields(fieldsFromEntities(nested));
+    eq('nested Custom Extractor fields are read', [nf.clientName?.value, nf.dob?.value], ['Jane Q Doe', '03/03/1941']);
+    const sum = entitySummary(nested);
+    check('the review screen can list what Google returned', sum.some((e) => e.name === 'client_name' && e.field === 'clientName') && sum.some((e) => e.name === 'member_dob_extra' && !e.field));
+    const molina = [
+      'Utilization Management', 'Phone: (800) 555-0100', 'Fax Coversheet', 'To: SAMPLE HOME CARE LLC',
+      '\f',
+    ].join('\n') + [
+      'Authorization Notification', 'Health Plan ID: 900000001', 'Member Name: DOE, JANE Q', 'Member DOB: 03/03/1941',
+      'Reference#: PUM000000001', 'Service Code', '$5125', '29 hrs on a 7 day plan',
+      'Member Phone', '(214) 555-0199', 'Member Address', '12 ELM ST DALLAS TX', '75201',
+      'Diagnosis code Diagnosis description', 'I10 ESSENTIAL PRIMARY HYPERTENSION Principal',
+    ].join('\n');
+    const mf = normalizeFields(fieldsFromText(molina, { confidence: 0.7 }));
+    eq('cover sheet phone is skipped; the member phone is used', mf.phone?.value, '(214) 555-0199');
+    check('"Health Plan ID: …" is not taken as the payer', !/ID/.test(mf.payer?.value || '') , mf.payer?.value);
+    eq('Reference# is read as the authorization number', mf.authNumber?.value, 'PUM000000001');
+    eq('"$5125" (OCR) becomes S5125', mf.serviceCode?.value, 'S5125');
+    eq('hours from "29 hrs on a 7 day plan"', mf.authHours?.value, '29 hrs/wk');
+    eq('ZIP on the next line is joined to the address', mf.address?.value, '12 ELM ST DALLAS TX 75201');
+    eq('diagnosis from the diagnosis table', mf.diagnosis?.value, 'ESSENTIAL PRIMARY HYPERTENSION (I10)');
+    eq('member DOB label', mf.dob?.value, '03/03/1941');
   }
 
   console.log('\n== Hardening (after review) ==');
