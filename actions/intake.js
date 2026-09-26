@@ -12,7 +12,7 @@ import * as db from '@/lib/queries';
 import { ingestDocument, processDocument } from '@/lib/intake';
 import { FIELDS } from '@/lib/docai/fields';
 import { validateFields, hasBlockingIssues } from '@/lib/docai/validate';
-import { SAMPLE_FAXES } from '@/lib/docai/samples';
+import { SAMPLE_FAXES, sampleFaxesEnabled } from '@/lib/docai/samples';
 
 async function audit(session, action, entityId, detail) {
   await db.logAuditEvent(session.organizationId, {
@@ -29,7 +29,10 @@ async function audit(session, action, entityId, detail) {
 
 export async function loadSampleFaxAction(sampleKey) {
   const session = await requirePermission('shared.inbox.manage');
-  const sample = SAMPLE_FAXES[sampleKey];
+  if (!sampleFaxesEnabled()) {
+    return { error: 'Sample faxes are switched off on this server.' };
+  }
+  const sample = Object.hasOwn(SAMPLE_FAXES, String(sampleKey)) ? SAMPLE_FAXES[sampleKey] : null;
   if (!sample) return { error: 'Unknown sample.' };
   const buffer = await readFile(path.join(process.cwd(), 'scripts', 'sample-faxes', sample.file));
   // A sample can be loaded again and again: a trailing PDF comment makes
@@ -66,7 +69,7 @@ export async function approveDocumentAction(documentId, prevState, formData) {
   const fields = {};
   const asFields = {};
   for (const f of FIELDS) {
-    const v = String(formData.get(f.key) || '').trim();
+    const v = String(formData.get(f.key) || '').trim().slice(0, f.key === 'diagnosis' || f.key === 'address' ? 300 : 120);
     fields[f.key] = v;
     asFields[f.key] = { value: v, confidence: 1, source: 'reviewer' };
   }
@@ -82,7 +85,10 @@ export async function approveDocumentAction(documentId, prevState, formData) {
       reviewer: { userId: session.userId, name: session.name },
     });
   } catch (err) {
-    return { error: err.message || 'Could not approve.' };
+    // Only our own, written-for-people messages go back to the browser.
+    if (err?.userFacing) return { error: err.message };
+    console.error('[intake] approve failed:', err);
+    return { error: 'Could not approve this document. Refresh the page and try again.' };
   }
   await audit(session, 'fax_approved', String(documentId), `referral ${referralId} created for ${fields.clientName}`);
   revalidatePath('/inbox');
@@ -97,7 +103,9 @@ export async function rejectDocumentAction(documentId, prevState, formData) {
   try {
     await db.rejectIncomingDocument(session.organizationId, String(documentId), { reason, reviewer: { userId: session.userId, name: session.name } });
   } catch (err) {
-    return { error: err.message };
+    if (err?.userFacing) return { error: err.message };
+    console.error('[intake] reject failed:', err);
+    return { error: 'Could not reject this document. Refresh the page and try again.' };
   }
   await audit(session, 'fax_rejected', String(documentId), reason.slice(0, 200));
   revalidatePath('/inbox');

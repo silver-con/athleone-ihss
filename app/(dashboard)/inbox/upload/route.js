@@ -14,7 +14,15 @@ export async function POST(request) {
   // Same-origin only (the session cookie is SameSite=Lax, this is belt and braces).
   const origin = request.headers.get('origin');
   const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
-  if (origin && host && new URL(origin).host !== host) return Response.json({ error: 'Not allowed.' }, { status: 403 });
+  if (origin && host) {
+    let originHost = null;
+    try {
+      originHost = new URL(origin).host;
+    } catch {
+      originHost = null; // e.g. "Origin: null"
+    }
+    if (originHost !== host) return Response.json({ error: 'Not allowed.' }, { status: 403 });
+  }
 
   let file;
   try {

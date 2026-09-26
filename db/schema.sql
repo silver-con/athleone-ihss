@@ -986,11 +986,14 @@ CREATE TABLE IF NOT EXISTS incoming_documents (
   reviewed_at         timestamptz,
   reject_reason       text,
   received_at         timestamptz NOT NULL DEFAULT now(),
+  processing_started_at timestamptz,
   processed_at        timestamptz
 );
 
 CREATE INDEX IF NOT EXISTS idx_incoming_docs_org_status ON incoming_documents(organization_id, status, received_at DESC);
-CREATE INDEX IF NOT EXISTS idx_incoming_docs_sha ON incoming_documents(organization_id, sha256);
+-- One live copy of a file per agency: a fax provider retrying the same fax
+-- at the same moment can't create two rows (rejected copies don't count).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_incoming_docs_sha_live ON incoming_documents(organization_id, sha256) WHERE status <> 'rejected';
 
 -- NOTE ON MIGRATING AN EXISTING DEV DATABASE:
 -- CREATE TABLE IF NOT EXISTS is a no-op against a database that already has

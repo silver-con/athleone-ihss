@@ -4,7 +4,7 @@ import { getSession } from '@/lib/auth';
 import { getIncomingDocuments, getOrganizationFaxSettings } from '@/lib/queries';
 import { hasPermission } from '@/lib/permissions';
 import { docaiStatus } from '@/lib/docai';
-import { SAMPLE_FAXES } from '@/lib/docai/samples';
+import { SAMPLE_FAXES, sampleFaxesEnabled } from '@/lib/docai/samples';
 import { appBaseUrl } from '@/lib/comms/config';
 import { FIELDS } from '@/lib/docai/fields';
 import UploadDropzone from '@/components/intake/UploadDropzone';
@@ -36,6 +36,8 @@ function when(d) {
 export default async function InboxPage({ searchParams }) {
   const session = await getSession();
   if (!session) redirect('/login');
+  if (!hasPermission(session.role, 'shared.inbox.view')) redirect('/');
+  const canManage = hasPermission(session.role, 'shared.inbox.manage');
   const params = await searchParams;
   const tab = TABS.some(([k]) => k === params?.tab) ? params.tab : 'open';
   const all = await getIncomingDocuments(session.organizationId);
@@ -68,16 +70,18 @@ export default async function InboxPage({ searchParams }) {
         }
       >
         <strong className="font-display">Reading engine:</strong> {engine.label}
-        {engine.provider === 'demo' && ' — it can read typed PDFs such as the samples below, but not scanned faxes. Connect Google Document AI to read real faxes (docs/FAX-INTAKE.md).'}
+        {engine.provider === 'demo' && ` — it can read typed PDFs${sampleFaxesEnabled() ? ' such as the samples below' : ''}, but not scanned faxes. Connect Google Document AI to read real faxes (docs/FAX-INTAKE.md).`}
         {engine.provider === 'google' && !engine.live && ` — missing ${engine.missing.join(', ')}.`}
       </div>
 
       <div className="grid md:grid-cols-[1fr_auto] gap-3 mt-4 items-start">
-        <UploadDropzone engineLabel={engine.provider === 'google' ? 'Google Document AI' : 'demo mode (typed PDFs only)'} />
+        {canManage && <UploadDropzone engineLabel={engine.provider === 'google' ? 'Google Document AI' : 'demo mode (typed PDFs only)'} />}
       </div>
-      <div className="mt-3">
-        <SampleFaxButtons samples={SAMPLE_FAXES} />
-      </div>
+      {canManage && sampleFaxesEnabled() && (
+        <div className="mt-3">
+          <SampleFaxButtons samples={SAMPLE_FAXES} />
+        </div>
+      )}
 
       <div className="flex gap-1 mt-6 border-b border-[var(--border)]">
         {TABS.map(([k, label]) => (

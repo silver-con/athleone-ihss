@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { hasPermission } from '@/lib/permissions';
 import { getIncomingDocument, findIntakeDuplicates } from '@/lib/queries';
 import ReviewForm from '@/components/intake/ReviewForm';
 import RetryButton from '@/components/intake/RetryButton';
+import RejectForm from '@/components/intake/RejectForm';
 
 export const metadata = { title: 'Review fax — Athleone', referrer: 'no-referrer' };
 
@@ -11,6 +13,7 @@ export const metadata = { title: 'Review fax — Athleone', referrer: 'no-referr
 export default async function ReviewDocumentPage({ params }) {
   const session = await getSession();
   if (!session) redirect('/login');
+  if (!hasPermission(session.role, 'shared.inbox.view')) redirect('/');
   const { id } = await params;
   const doc = await getIncomingDocument(session.organizationId, id);
   if (!doc) notFound();
@@ -72,11 +75,16 @@ export default async function ReviewDocumentPage({ params }) {
                   Enter the referral by hand
                 </Link>
               </div>
+              <RejectForm documentId={doc.id} />
             </div>
           )}
           {(doc.status === 'received' || doc.status === 'processing') && (
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 mb-4 text-[12.5px]">
-              Still reading this document — refresh in a moment. <RetryButton documentId={doc.id} />
+              {doc.stuck
+                ? 'Reading this document was interrupted. Read it again, or reject it.'
+                : 'Still reading this document — refresh in a moment.'}{' '}
+              {(doc.status === 'received' || doc.stuck) && <RetryButton documentId={doc.id} />}
+              {doc.stuck && <RejectForm documentId={doc.id} />}
             </div>
           )}
           {approved && (

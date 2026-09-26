@@ -36,7 +36,9 @@ gcloud services enable run.googleapis.com sqladmin.googleapis.com secretmanager.
 say "Service account the app runs as: $RUN_SA"
 exists gcloud iam service-accounts describe "$RUN_SA" || \
   gcloud iam service-accounts create "${SERVICE}-run" --display-name "Athleone (Cloud Run)"
-for role in roles/cloudsql.client roles/secretmanager.secretAccessor roles/documentai.apiUser; do
+# Project-wide: Cloud SQL client and Document AI user only. Secret access is
+# granted per secret below, bucket access on the bucket only.
+for role in roles/cloudsql.client roles/documentai.apiUser; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:$RUN_SA" --role "$role" --condition=None >/dev/null
 done
 
@@ -44,7 +46,10 @@ say "Private bucket for fax files: gs://$BUCKET"
 if ! exists gcloud storage buckets describe "gs://$BUCKET"; then
   gcloud storage buckets create "gs://$BUCKET" --location "$REGION" --uniform-bucket-level-access --public-access-prevention
 fi
-gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member "serviceAccount:$RUN_SA" --role roles/storage.objectAdmin >/dev/null
+# Create + read objects; the app never deletes or overwrites fax files.
+for role in roles/storage.objectCreator roles/storage.objectViewer; do
+  gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --member "serviceAccount:$RUN_SA" --role "$role" >/dev/null
+done
 
 say "Postgres (Cloud SQL): $DB_INSTANCE — creating takes ~10 minutes the first time"
 if ! exists gcloud sql instances describe "$DB_INSTANCE"; then
@@ -75,6 +80,9 @@ if ! exists gcloud secrets describe athleone-database-url; then
 fi
 secret athleone-session-secret "$(openssl rand -hex 32)"
 secret athleone-evv-credentials-key "$(openssl rand -hex 32)"
+for s in athleone-database-url athleone-session-secret athleone-evv-credentials-key; do
+  gcloud secrets add-iam-policy-binding "$s" --member "serviceAccount:$RUN_SA" --role roles/secretmanager.secretAccessor >/dev/null
+done
 
 say "Container registry"
 exists gcloud artifacts repositories describe "$REPO" --location "$REGION" || \
@@ -83,24 +91,36 @@ exists gcloud artifacts repositories describe "$REPO" --location "$REGION" || \
 say "Building the app image with Cloud Build (~5 minutes)"
 gcloud builds submit --tag "$IMAGE:latest" .
 
-ENVS="STORAGE_DRIVER=gcs,GCS_BUCKET=${BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},DOCAI_LOCATION=${DOCAI_LOCATION:-us},DOCAI_PROVIDER=${DOCAI_PROVIDER:-demo}"
+# --update-* (not --set-*) everywhere below, so re-running this script keeps
+# settings added later (email/SMS keys, DOCAI_PROVIDER=google, …). Settings
+# are only included when given; the app's defaults cover the rest
+# (DOCAI_PROVIDER defaults to demo).
+ENVS="STORAGE_DRIVER=gcs,GCS_BUCKET=${BUCKET},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},DOCAI_LOCATION=${DOCAI_LOCATION:-us}"
+[ -n "${DOCAI_PROVIDER:-}" ] && ENVS="${ENVS},DOCAI_PROVIDER=${DOCAI_PROVIDER}"
 [ -n "${DOCAI_PROCESSOR_ID:-}" ] && ENVS="${ENVS},DOCAI_PROCESSOR_ID=${DOCAI_PROCESSOR_ID}"
+# "Try a sample fax" buttons: on for a brand-new service (a demo server) unless
+# ALLOW_SAMPLE_FAXES=false; switch off for real use (see the guide).
+if [ -n "${ALLOW_SAMPLE_FAXES:-}" ]; then
+  ENVS="${ENVS},ALLOW_SAMPLE_FAXES=${ALLOW_SAMPLE_FAXES}"
+elif ! exists gcloud run services describe "$SERVICE" --region "$REGION"; then
+  ENVS="${ENVS},ALLOW_SAMPLE_FAXES=true"
+fi
 SECRETS="DATABASE_URL=athleone-database-url:latest,SESSION_SECRET=athleone-session-secret:latest,EVV_CREDENTIALS_KEY=athleone-evv-credentials-key:latest"
 
 say "Database migrations (Cloud Run job)"
 gcloud run jobs deploy "${SERVICE}-migrate" --image "$IMAGE:latest" --region "$REGION" --service-account "$RUN_SA" \
-  --set-cloudsql-instances "$CONN" --set-env-vars "$ENVS" --set-secrets "$SECRETS" \
+  --set-cloudsql-instances "$CONN" --update-env-vars "$ENVS" --update-secrets "$SECRETS" \
   --command node --args=--disable-warning=MODULE_TYPELESS_PACKAGE_JSON,scripts/migrate.mjs --max-retries 0 --task-timeout 600 >/dev/null
 gcloud run jobs execute "${SERVICE}-migrate" --region "$REGION" --wait
 
 say "One-off task job (seed, create platform admin) — see deploy/gcp/run-script.sh"
 gcloud run jobs deploy "${SERVICE}-task" --image "$IMAGE:latest" --region "$REGION" --service-account "$RUN_SA" \
-  --set-cloudsql-instances "$CONN" --set-env-vars "$ENVS" --set-secrets "$SECRETS" \
+  --set-cloudsql-instances "$CONN" --update-env-vars "$ENVS" --update-secrets "$SECRETS" \
   --command node --args=--disable-warning=MODULE_TYPELESS_PACKAGE_JSON,scripts/migrate.mjs,--status --max-retries 0 --task-timeout 600 >/dev/null
 
 say "Deploying the app (Cloud Run service)"
 gcloud run deploy "$SERVICE" --image "$IMAGE:latest" --region "$REGION" --service-account "$RUN_SA" \
-  --add-cloudsql-instances "$CONN" --set-env-vars "$ENVS" --set-secrets "$SECRETS" \
+  --add-cloudsql-instances "$CONN" --update-env-vars "$ENVS" --update-secrets "$SECRETS" \
   --allow-unauthenticated --no-cpu-throttling --min-instances "${MIN_INSTANCES:-0}" --max-instances 4 \
   --memory 1Gi --cpu 1 --timeout 300 --port 8080 >/dev/null
 

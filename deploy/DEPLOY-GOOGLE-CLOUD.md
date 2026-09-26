@@ -59,8 +59,9 @@ It takes about 20 minutes the first time. Creating the database is the slow
 part. What it does, in order:
 
 1. Turns on the services and creates the `athleone-run` service account,
-   with only these roles: Cloud SQL client, Secret Manager accessor,
-   Document AI user, and access to its own bucket.
+   with only these roles: Cloud SQL client and Document AI user; read access
+   to its own three secrets only; create and read (not delete) on its own
+   bucket.
 2. Creates a private bucket for fax files, with public access blocked.
 3. Creates the Cloud SQL Postgres instance (backups at 08:00 UTC,
    point-in-time recovery), the database and a user with a random password.
@@ -72,8 +73,9 @@ part. What it does, in order:
 
 At the end it prints the address, e.g. `https://athleone-abc123-uc.a.run.app`.
 
-> Re-running the script is safe: it keeps existing secrets and data and only
-> fills in what's missing.
+> Re-running the script is safe: it keeps existing secrets, data and any
+> settings you added later (email/SMS keys, real fax reading), and only fills
+> in what's missing.
 
 ## 3. Create your admin account, load demo data
 
@@ -88,7 +90,8 @@ PROJECT_ID=athleone-prod bash deploy/gcp/run-script.sh seed.mjs --yes-reset-demo
 
 These run as one-off Cloud Run job executions against the real database.
 Command-line arguments are visible in the job's history, so change that
-password after your first sign-in. Once email is connected, you can also use
+password after your first sign-in. Don't use `|` in it (the script uses `|`
+to separate arguments). Once email is connected, you can also use
 "Forgot password?".
 
 ## 4. Deploying updates
@@ -124,6 +127,13 @@ env vars, and `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` as secrets. Then open
 
 > Google Cloud blocks outgoing SMTP on port 25; ports 587/465 work. SendGrid,
 > Postmark and Resend send over HTTPS and aren't affected.
+
+**Before real clients:** switch off the sample-fax buttons (the setup
+turned them on for demos):
+
+```bash
+gcloud run services update athleone --region us-central1 --update-env-vars ALLOW_SAMPLE_FAXES=false
+```
 
 ## 6. Your own domain (optional)
 

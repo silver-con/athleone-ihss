@@ -20,6 +20,7 @@ const { extractWithGoogle, processUrl, googleDocaiConfig } = await import('./doc
 const { getGoogleAccessToken, clearGoogleTokenCache } = await import('./google-auth.js');
 const { putFile, getFile } = await import('./storage.js');
 const { ingestDocument, processDocument, sniffMimeType } = await import('./intake.js');
+const { sampleFaxesEnabled } = await import('./docai/samples.js');
 
 let pass = 0;
 const failures = [];
@@ -261,12 +262,55 @@ async function run() {
   const genv = { STORAGE_DRIVER: 'gcs', GCS_BUCKET: 'athleone-faxes', GOOGLE_SERVICE_ACCOUNT_JSON: saJson };
   await putFile('org-1/incoming/doc.pdf', Buffer.from('abc'), 'application/pdf', { fetchImpl: gcsFetch, env: genv });
   const up = gcs.find((c) => c.init.method === 'POST' && c.url.includes('/upload/'));
-  eq('upload goes to the bucket with the object name encoded', up.url, 'https://storage.googleapis.com/upload/storage/v1/b/athleone-faxes/o?uploadType=media&name=org-1%2Fincoming%2Fdoc.pdf');
+  eq('upload goes to the bucket with the object name encoded', up.url, 'https://storage.googleapis.com/upload/storage/v1/b/athleone-faxes/o?uploadType=media&ifGenerationMatch=0&name=org-1%2Fincoming%2Fdoc.pdf');
   eq('  ...authorised', up.init.headers.Authorization, 'Bearer gcs-token');
   const got = await getFile('org-1/incoming/doc.pdf', { fetchImpl: gcsFetch, env: genv });
   eq('download returns the bytes', got.toString(), 'stored-bytes');
   await throws('a key trying to escape the folder is refused', () => putFile('org-1/../../etc/passwd', Buffer.from('x'), 'text/plain'), 'Bad storage key');
   await throws('gcs without a bucket is refused', () => putFile('a/b.pdf', Buffer.from('x'), 'application/pdf', { env: { STORAGE_DRIVER: 'gcs' } }), 'GCS_BUCKET');
+  await throws('  ...also for downloads', () => getFile('a/b.pdf', { env: { STORAGE_DRIVER: 'gcs' } }), 'GCS_BUCKET');
+
+  console.log('\n== Hardening (after review) ==');
+  // Two deliveries of the same fax at the same moment -> one row.
+  const raceBuf = Buffer.concat([sample('molina-authorization-rosa-delgado.pdf'), Buffer.from('\n%race-test\n')]);
+  const [ra, rb] = await Promise.all([
+    ingestDocument({ organizationId: ORG, buffer: raceBuf, source: 'fax' }),
+    ingestDocument({ organizationId: ORG, buffer: raceBuf, source: 'fax' }),
+  ]);
+  eq('simultaneous duplicates end up as one document', ra.id, rb.id);
+  check('  ...and one of them is flagged as the duplicate', Boolean(ra.duplicateOf) !== Boolean(rb.duplicateOf));
+  eq('  ...only one row in the database', Number((await queryOne(`SELECT count(*)::int AS n FROM incoming_documents WHERE organization_id = $1 AND id = $2`, [ORG, ra.id])).n), 1);
+
+  // A read interrupted mid-way (server restart) is left in 'processing'.
+  await query(`UPDATE incoming_documents SET status = 'processing', processing_started_at = now() WHERE organization_id = $1 AND id = $2`, [ORG, ra.id]);
+  let d = await db.getIncomingDocument(ORG, ra.id);
+  eq('a document being read right now is not "stuck"', d.stuck, false);
+  eq('  ...and can\'t be read a second time at once', (await processDocument(ORG, ra.id)).ok, false);
+  await query(`UPDATE incoming_documents SET processing_started_at = now() - interval '11 minutes' WHERE organization_id = $1 AND id = $2`, [ORG, ra.id]);
+  d = await db.getIncomingDocument(ORG, ra.id);
+  eq('after 10 minutes it counts as interrupted', d.stuck, true);
+  eq('  ...and reading it again works', (await processDocument(ORG, ra.id)).ok, true);
+  eq('  ...ending in needs_review', (await db.getIncomingDocument(ORG, ra.id)).status, 'needs_review');
+  await query(`UPDATE incoming_documents SET status = 'processing', processing_started_at = now() - interval '11 minutes' WHERE organization_id = $1 AND id = $2`, [ORG, ra.id]);
+  await db.rejectIncomingDocument(ORG, ra.id, { reason: 'QA: interrupted', reviewer: { userId: 'u1', name: 'QA' } });
+  eq('an interrupted document can be rejected', (await db.getIncomingDocument(ORG, ra.id)).status, 'rejected');
+  let rejErr = null;
+  try { await db.rejectIncomingDocument(ORG, ra.id, { reason: 'again', reviewer: {} }); } catch (e) { rejErr = e; }
+  check('rejecting twice gives a message meant for people', rejErr?.userFacing === true, rejErr?.message);
+  const again2 = await ingestDocument({ organizationId: ORG, buffer: raceBuf, source: 'fax' });
+  check('after rejection, the same file can be filed again', again2.ok && !again2.duplicateOf);
+
+  // Parser fixes
+  eq('two-digit birth year in the past: 1900s', normalizeDate('04/12/41', { past: true }), '04/12/1941');
+  eq('two-digit birth year that could be this century stays', normalizeDate('04/12/19', { past: true }), '04/12/2019');
+  eq('"Member #: 123…" is not taken as the client name', fieldsFromText('Member #: 123456789\nMember Name: Jane Q Test').clientName?.value, 'Jane Q Test');
+  const child = validateFields({ clientName: { value: 'A B', confidence: 1 }, dob: { value: '01/01/2020', confidence: 1 } }, { checkConfidence: false });
+  check('a child\'s birth date is flagged (warning, not an error)', (child.dob || []).some((i) => i.level === 'warn') && !(child.dob || []).some((i) => i.level === 'error'));
+
+  // Sample faxes only on demo servers in production
+  eq('sample faxes on in development', sampleFaxesEnabled({ NODE_ENV: 'development' }), true);
+  eq('sample faxes off in production by default', sampleFaxesEnabled({ NODE_ENV: 'production' }), false);
+  eq('  ...on with ALLOW_SAMPLE_FAXES=true', sampleFaxesEnabled({ NODE_ENV: 'production', ALLOW_SAMPLE_FAXES: 'true' }), true);
 }
 
 run().then(async () => {

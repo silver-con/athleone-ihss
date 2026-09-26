@@ -114,7 +114,9 @@ check each one's current plans for webhook support. Then:
 2. In the fax service, set incoming faxes to be sent to the **webhook
    address** shown there (HTTP POST), with the header
    `Authorization: Bearer <secret>`. If the service can't add headers, append
-   `&token=<secret>` to the address.
+   `&token=<secret>` to the address. That works, but web addresses are
+   written to request logs (yours and the provider's), so prefer the header,
+   and generate a new secret if the logs are ever shared.
 3. Send a test fax. It appears in the inbox within seconds.
 
 The webhook accepts the fax as a multipart file (any field name) or as a raw
@@ -134,3 +136,10 @@ inbox.
 - Files are stored per agency (`<agency>/incoming/<id>.pdf`), are only
   served to signed-in staff of that agency, and are never cached.
 - Every upload, approval and rejection is in the Audit Log.
+- The same file can only be filed once per agency: the database enforces it,
+  even if the fax service delivers it twice at the same moment.
+- If reading is interrupted (e.g. the server restarted mid-read), the
+  document shows **Read it again** / **Reject** after 10 minutes.
+- **"Try a sample fax"** is available in development. On a production server it
+  is off unless `ALLOW_SAMPLE_FAXES=true` (set it on a demo server only; the
+  Google Cloud setup script turns it on for a brand-new service).
