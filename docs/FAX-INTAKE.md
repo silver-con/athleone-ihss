@@ -231,3 +231,28 @@ inbox.
   The reviewer picks a **primary** line, which fills the form. The care plan
   is built from the primary line, and the other lines are listed in its
   notes.
+
+## Missing or doubtful IDs (2026-09-26)
+
+A missing ID never slips through silently, whether or not the field is
+required.
+
+- **Key IDs:** Medicaid ID, authorization #, procedure code and diagnosis
+  code. When one is empty, the reviewer picks a reason before approving:
+  - not printed on the fax;
+  - pending from the payer;
+  - will get it from the client;
+  - unreadable (resend requested);
+  - other, with a note.
+- **Doubtful values:** any ID read with low confidence or failing its format
+  check (key IDs, plan member ID, case ID, provider NPI) is checked against
+  the fax, or given a reason. A value the reviewer typed or corrected counts
+  as checked.
+- **Required IDs:** an ID that's required for the document type and empty
+  stays **blocked**. It must be entered.
+- **What's recorded:**
+  - Reasons (never the ID values) are saved with the referral and in the
+    Audit Log (`fax_ids_acknowledged`).
+  - The referral shows **Missing IDs** in the list, on its page and on the
+    intake form until intake is completed.
+  - The care plan notes which IDs were missing.
