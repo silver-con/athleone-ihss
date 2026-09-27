@@ -4,6 +4,7 @@ import { useActionState, useMemo, useState } from 'react';
 import { approveDocumentAction, rejectDocumentAction } from '@/actions/intake';
 import { FIELDS, DOCUMENT_TYPES, isRequired } from '@/lib/docai/fields';
 import { LINE_TO_FIELD, fieldsForLine } from '@/lib/docai/service-lines';
+import { idChecks, unacknowledged, reasonsFor } from '@/lib/docai/id-checks';
 import { validateFields, LOW_CONFIDENCE } from '@/lib/docai/validate';
 
 const GROUPS = [
@@ -46,6 +47,7 @@ export default function ReviewForm({
   const [primaryLine, setPrimaryLine] = useState(initialPrimaryLine);
   const [typeReason, setTypeReason] = useState('');
   const [medicaidFromPlan, setMedicaidFromPlan] = useState(false);
+  const [acks, setAcks] = useState({});
   const [approveState, approve, approving] = useActionState(approveDocumentAction.bind(null, documentId), {});
   const [rejectState, reject, rejecting] = useActionState(rejectDocumentAction.bind(null, documentId), {});
   const [showReject, setShowReject] = useState(false);
@@ -56,7 +58,11 @@ export default function ReviewForm({
     if (needsTypeReason && !typeReason.trim()) (out.documentType ||= []).push({ level: 'error', message: 'This looks like an authorization notice. Say why you’re treating it as a referral.' });
     return out;
   }, [fields, agency, documentType, lineStatus, needsTypeReason, typeReason]);
-  const errorCount = Object.values(issues).flat().filter((i) => i.level === 'error').length;
+  const checks = useMemo(() => idChecks(fields, issues), [fields, issues]);
+  const pendingAcks = unacknowledged(checks, acks);
+  const fieldErrorCount = Object.values(issues).flat().filter((i) => i.level === 'error').length;
+  const errorCount = fieldErrorCount + pendingAcks.length;
+  const setAck = (key, patch) => setAcks((a) => ({ ...a, [key]: { ...(a[key] || {}), ...patch } }));
 
   const set = (key, value) => {
     if (key === 'medicaidId') setMedicaidFromPlan(false);
@@ -237,6 +243,55 @@ export default function ReviewForm({
           </section>
         ))}
 
+        <input type="hidden" name="idAcknowledgments" value={JSON.stringify(Object.fromEntries(checks.map((c) => [c.key, acks[c.key] || {}])))} />
+        {checks.length > 0 && !readOnly && (
+          <section className="rounded-2xl border border-[oklch(86%_0.06_85)] bg-[oklch(97%_0.03_85)] p-4">
+            <div className="font-display font-extrabold text-[13.5px] text-[oklch(38%_0.1_75)]">
+              {checks.length} ID{checks.length === 1 ? '' : 's'} to confirm before approving
+            </div>
+            <p className="text-[11.5px] text-[oklch(40%_0.05_75)] mt-0.5 mb-3">
+              Fill the field in above if you can. Otherwise say why — it’s saved with the referral and in the Audit Log, and the referral shows “Missing IDs” until it’s filled in.
+            </p>
+            <div className="flex flex-col gap-2.5">
+              {checks.map((c) => {
+                const a = acks[c.key] || {};
+                const ok = !pendingAcks.some((p) => p.key === c.key);
+                return (
+                  <div key={c.key} className="flex flex-wrap items-center gap-2 text-[12.5px]">
+                    <span className={'min-w-[190px] font-display font-bold ' + (ok ? 'text-[oklch(42%_0.1_150)]' : 'text-[oklch(38%_0.1_75)]')}>
+                      {ok ? '✓ ' : ''}
+                      {c.label} — {c.state === 'missing' ? 'missing' : 'check'}
+                    </span>
+                    <span className="text-[11.5px] text-[var(--muted)] min-w-[160px]">{c.detail}</span>
+                    <select
+                      aria-label={`Reason for ${c.label}`}
+                      value={a.reason || ''}
+                      onChange={(e) => setAck(c.key, { reason: e.target.value })}
+                      className="border border-[var(--border)] rounded-lg px-2 py-1.5 text-[12.5px] bg-white"
+                    >
+                      <option value="">Choose a reason…</option>
+                      {reasonsFor(c.state).map(([k, label]) => (
+                        <option key={k} value={k}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    {a.reason === 'other' && (
+                      <input
+                        aria-label={`Note for ${c.label}`}
+                        value={a.note || ''}
+                        onChange={(e) => setAck(c.key, { note: e.target.value })}
+                        placeholder="Note (required)"
+                        className="flex-1 min-w-[180px] border border-[var(--border)] rounded-lg px-2 py-1.5 text-[12.5px] bg-white"
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {!readOnly && (
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -250,7 +305,11 @@ export default function ReviewForm({
               Reject
             </button>
             <span className="text-[12px] text-[var(--muted)]">
-              {errorCount > 0 ? `${errorCount} field${errorCount === 1 ? '' : 's'} to fix before approving.` : 'Checked against the fax? Approve creates the referral; intake happens next.'}
+              {fieldErrorCount > 0
+                ? `${fieldErrorCount} field${fieldErrorCount === 1 ? '' : 's'} to fix before approving.`
+                : pendingAcks.length > 0
+                  ? `${pendingAcks.length} ID${pendingAcks.length === 1 ? '' : 's'} still need a reason.`
+                  : 'Checked against the fax? Approve creates the referral; intake happens next.'}
             </span>
           </div>
         )}

@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitIntakeAction } from '@/actions/referrals';
+import { openMissingIds } from '@/lib/docai/id-checks';
 
 const initialState = { error: null };
 
@@ -42,6 +43,15 @@ export default function IntakeForm({ referral, careNeedOptions, locations = [] }
       <p className="text-[13.5px] text-[var(--muted)] mt-1">
         Referral from {referral.payer} · {referral.authNumber ? `Authorization ${referral.authNumber}` : 'No authorization yet'}
       </p>
+      {openMissingIds(referral).length > 0 && (
+        <div className="mt-3 rounded-xl border border-[oklch(86%_0.06_85)] bg-[oklch(97%_0.03_85)] px-4 py-3 text-[12.5px]">
+          <strong className="font-display">Missing IDs from the fax:</strong>{' '}
+          {openMissingIds(referral)
+            .map((m) => `${m.label} (${(m.reasonLabel || m.reason || '').toLowerCase()})`)
+            .join('; ')}
+          . Enter them below if you have them now.
+        </div>
+      )}
 
       {/* Filled from the fax when the referral came through the Fax Inbox. */}
       <Section title="Client Information">

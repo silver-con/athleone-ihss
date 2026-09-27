@@ -13,6 +13,7 @@ import { ingestDocument, processDocument } from '@/lib/intake';
 import { FIELDS, DOCUMENT_TYPES } from '@/lib/docai/fields';
 import { validateFields, hasBlockingIssues } from '@/lib/docai/validate';
 import { SAMPLE_FAXES, sampleFaxesEnabled } from '@/lib/docai/samples';
+import { idChecks, unacknowledged, acknowledgmentRecords, acknowledgmentSummary } from '@/lib/docai/id-checks';
 
 async function audit(session, action, entityId, detail) {
   await db.logAuditEvent(session.organizationId, {
@@ -67,11 +68,9 @@ export async function retryDocumentAction(documentId) {
 export async function approveDocumentAction(documentId, prevState, formData) {
   const session = await requirePermission('shared.inbox.manage');
   const fields = {};
-  const asFields = {};
   for (const f of FIELDS) {
     const v = String(formData.get(f.key) || '').trim().slice(0, f.key === 'approvedTasks' ? 1000 : f.key === 'diagnosis' || f.key === 'address' || f.key === 'service' ? 300 : 120);
     fields[f.key] = v;
-    asFields[f.key] = { value: v, confidence: 1, source: 'reviewer' };
   }
   const doc = await db.getIncomingDocument(session.organizationId, String(documentId));
   if (!doc) return { error: 'Document not found.' };
@@ -87,11 +86,34 @@ export async function approveDocumentAction(documentId, prevState, formData) {
   }
   const medicaidFromPlan = formData.get('medicaidConfirmedFromPlan') === '1' && fields.medicaidId && fields.medicaidId === fields.planMemberId;
   const org = await db.getOrganization(session.organizationId);
-  const issues = validateFields(asFields, { checkConfidence: false, documentType, lineStatus, agency: org ? { name: org.name, npi: org.npi || null } : null });
+  // Confidence comes from what was READ, not from the browser: an unchanged
+  // value keeps the reader's confidence; anything the reviewer typed or
+  // changed counts as checked by them.
+  const read = doc.extraction?.fields || {};
+  const serverFields = {};
+  for (const f of FIELDS) {
+    const v = fields[f.key];
+    const r = read[f.key];
+    serverFields[f.key] = !v ? { value: '' } : r && String(r.value ?? '').trim() === v ? { value: v, confidence: r.confidence, source: r.source } : { value: v, confidence: 1, source: 'reviewer' };
+  }
+  const issues = validateFields(serverFields, { checkConfidence: false, documentType, lineStatus, agency: org ? { name: org.name, npi: org.npi || null } : null });
   if (hasBlockingIssues(issues)) {
     const first = Object.values(issues).flat().find((i) => i.level === 'error');
     return { error: `Fix the highlighted fields first: ${first.message}`, issues };
   }
+  // Missing or doubtful IDs need a reason, required or not.
+  let acks = {};
+  try {
+    acks = JSON.parse(String(formData.get('idAcknowledgments') || '{}')) || {};
+  } catch {
+    acks = {};
+  }
+  const checks = idChecks(serverFields, issues);
+  const pending = unacknowledged(checks, acks);
+  if (pending.length) {
+    return { error: `Say why these IDs are missing or unconfirmed first: ${pending.map((p) => p.label).join(', ')}.` };
+  }
+  const idAcknowledgments = acknowledgmentRecords(checks, acks);
   let referralId;
   try {
     referralId = await db.approveIncomingDocument(session.organizationId, String(documentId), {
@@ -101,6 +123,7 @@ export async function approveDocumentAction(documentId, prevState, formData) {
       primaryLine,
       typeChangeReason: typeChangeReason || null,
       medicaidConfirmedFromPlan: Boolean(medicaidFromPlan),
+      idAcknowledgments,
     });
   } catch (err) {
     // Only our own, written-for-people messages go back to the browser.
@@ -110,6 +133,7 @@ export async function approveDocumentAction(documentId, prevState, formData) {
   }
   await audit(session, 'fax_approved', String(documentId), `referral ${referralId} created (${documentType}${lines.length > 1 ? `, primary service line ${primaryLine + 1} of ${lines.length}` : ''})`);
   if (typeChangeReason) await audit(session, 'fax_document_type_changed', String(documentId), `read as ${doc.docType}, approved as ${documentType}: ${typeChangeReason.slice(0, 200)}`);
+  if (idAcknowledgments.length) await audit(session, 'fax_ids_acknowledged', String(documentId), acknowledgmentSummary(idAcknowledgments).slice(0, 500));
   if (medicaidFromPlan) await audit(session, 'fax_medicaid_confirmed_from_plan_member_id', String(documentId), 'reviewer confirmed the plan member ID as the Medicaid ID');
   revalidatePath('/inbox');
   revalidatePath('/referrals');
