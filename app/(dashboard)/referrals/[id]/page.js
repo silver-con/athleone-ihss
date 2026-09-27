@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { openMissingIds } from '@/lib/docai/id-checks';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getReferral } from '@/lib/queries';
@@ -71,6 +72,22 @@ export default async function ReferralDetailPage({ params }) {
           <dt className="font-bold text-[var(--muted)]">Reason</dt>
           <dd>{referral.diagnosis}</dd>
         </dl>
+
+        {Array.isArray(referral.fax?.idAcknowledgments) && referral.fax.idAcknowledgments.length > 0 && (
+          <div className="mt-5 pt-5 border-t border-[var(--border)] text-[12.5px]">
+            <div className="font-display font-bold mb-1.5">
+              IDs acknowledged at approval{openMissingIds(referral).length > 0 ? ` — ${openMissingIds(referral).length} still missing` : ''}
+            </div>
+            <ul className="space-y-1">
+              {referral.fax.idAcknowledgments.map((r) => (
+                <li key={r.field}>
+                  <strong>{r.label}</strong> — {r.state === 'missing' ? 'missing' : 'checked'}: {r.reasonLabel || r.reason}
+                  {r.note ? ` (${r.note})` : ''}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {Array.isArray(referral.fax?.serviceLines) && referral.fax.serviceLines.length > 1 && (
           <div className="mt-5 pt-5 border-t border-[var(--border)] text-[12.5px]">

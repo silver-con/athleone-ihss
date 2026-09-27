@@ -537,6 +537,59 @@ async function run() {
     check('the care plan comes from the primary line and lists the other one', cp.serviceCode === 'S5150' && /1 other service line/.test(cp.notes) && /S5125 U5/.test(cp.notes), cp.notes);
   }
 
+  console.log('\n== Missing or doubtful IDs need an acknowledgment ==');
+  {
+    const { idChecks, unacknowledged, acknowledgmentRecords, acknowledgmentSummary, openMissingIds, reasonsFor } = await import('./docai/id-checks.js');
+    const { authorizationFromFax } = await import('./fax-authorization.js');
+    const F = (o) => Object.fromEntries(Object.entries(o).map(([k, x]) => [k, typeof x === 'object' ? x : { value: x, confidence: 0.9, source: 'engine' }]));
+    const o = { checkConfidence: false, today: new Date('2026-09-26') };
+    const base = { clientName: 'A B', dob: '01/01/1950', payer: 'P', service: 'Personal care', diagnosis: 'D' };
+
+    // A referral with no IDs at all
+    const refFields = F(base);
+    const refChecks = idChecks(refFields, validateFields(refFields, { ...o, documentType: 'referral' }));
+    eq('a referral missing every key ID lists all four as missing', refChecks.map((c) => [c.key, c.state]), [['medicaidId', 'missing'], ['authNumber', 'missing'], ['serviceCode', 'missing'], ['diagnosisCode', 'missing']]);
+    eq('  ...and none are acknowledged yet', unacknowledged(refChecks, {}).length, 4);
+
+    // As an authorization, the empty auth # is BLOCKED (must be entered), not acknowledgeable
+    const authChecks = idChecks(refFields, validateFields(refFields, { ...o, documentType: 'authorization' }));
+    check('on an authorization notice a missing auth # is blocked, not acknowledged', !authChecks.some((c) => c.key === 'authNumber'));
+
+    // Doubtful values
+    const doubt = F({ ...base, medicaidId: { value: '12345', confidence: 0.95, source: 'engine' }, planMemberId: { value: '900000555', confidence: 0.4, source: 'engine' }, providerNpi: '1234567890', caseId: { value: 'LTSS-1', confidence: 0.95, source: 'engine' } });
+    const dChecks = idChecks(doubt, validateFields(doubt, { ...o, documentType: 'referral' }));
+    check('a Medicaid ID in the wrong format is not acknowledgeable (it blocks)', !dChecks.some((c) => c.key === 'medicaidId'));
+    check('a low-confidence plan member ID needs checking', dChecks.some((c) => c.key === 'planMemberId' && c.state === 'doubtful' && /low confidence/i.test(c.detail)));
+    check('an NPI failing its check digit needs checking', dChecks.some((c) => c.key === 'providerNpi' && c.state === 'doubtful'));
+    check('a confident case ID needs nothing', !dChecks.some((c) => c.key === 'caseId'));
+    const edited = F({ ...base, planMemberId: { value: '900000555', confidence: 0.4, source: 'reviewer' } });
+    check('a value the reviewer typed or corrected counts as checked', !idChecks(edited, validateFields(edited, { ...o, documentType: 'referral' })).some((c) => c.key === 'planMemberId'));
+
+    // Reasons
+    const acks = { medicaidId: { reason: 'pending_payer' }, authNumber: { reason: 'not_on_fax' }, serviceCode: { reason: 'other' }, diagnosisCode: { reason: 'checked' } };
+    eq('"Other" needs a note, and "checked" isn\'t a reason for a missing ID', unacknowledged(refChecks, acks).map((c) => c.key), ['serviceCode', 'diagnosisCode']);
+    check('"Checked against the fax" is offered only for doubtful values', reasonsFor('doubtful').some(([k]) => k === 'checked') && !reasonsFor('missing').some(([k]) => k === 'checked'));
+    const good = { ...acks, serviceCode: { reason: 'other', note: 'plan will send the code' }, diagnosisCode: { reason: 'from_client' } };
+    eq('with valid reasons, nothing is left', unacknowledged(refChecks, good).length, 0);
+    const records = acknowledgmentRecords(refChecks, good);
+    check('records hold reasons, never ID values', records.every((r) => r.reason && !('value' in r)) && records.find((r) => r.field === 'serviceCode').note === 'plan will send the code');
+    check('audit summary is readable', /Medicaid ID missing \(pending from the payer\)/.test(acknowledgmentSummary(records)));
+
+    // Saved on approval; shown as missing until intake; noted on the care plan
+    const hosp = await ingestDocument({ organizationId: ORG, buffer: Buffer.concat([sample('hospital-discharge-incomplete.pdf'), Buffer.from('\n%ack1\n')]), source: 'upload' });
+    await processDocument(ORG, hosp.id);
+    const hd = await db.getIncomingDocument(ORG, hosp.id);
+    const hf = Object.fromEntries(Object.entries(hd.extraction.fields).map(([k, x]) => [k, x.value]));
+    const rid = await db.approveIncomingDocument(ORG, hosp.id, { fields: hf, reviewer: { name: 'QA' }, documentType: 'referral', idAcknowledgments: records });
+    const r = await db.getReferral(ORG, rid);
+    eq('acknowledgments are saved with the referral', r.fax.idAcknowledgments.map((x) => [x.field, x.reason]), [['medicaidId', 'pending_payer'], ['authNumber', 'not_on_fax'], ['serviceCode', 'other'], ['diagnosisCode', 'from_client']]);
+    eq('  ...and with the document', (await db.getIncomingDocument(ORG, hosp.id)).extraction.idAcknowledgments.length, 4);
+    eq('the referral shows its missing IDs', openMissingIds(r).map((m) => m.label), ['Medicaid ID', 'Authorization #', 'Procedure code', 'Diagnosis code']);
+    eq('  ...until intake is completed', openMissingIds({ ...r, status: 'completed' }).length, 0);
+    const cp = authorizationFromFax({ ...r, fax: { ...r.fax, serviceCode: 'S5125', authStart: '10/01/2026', authEnd: '12/31/2026' } }, 'c');
+    check('the care plan notes which IDs were missing', /IDs missing when the fax was approved: Medicaid ID \(pending from the payer\)/.test(cp.notes), cp.notes);
+  }
+
   console.log('\n== Hardening (after review) ==');
   // Two deliveries of the same fax at the same moment -> one row.
   const raceBuf = Buffer.concat([sample('molina-authorization-rosa-delgado.pdf'), Buffer.from('\n%race-test\n')]);

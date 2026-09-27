@@ -270,3 +270,33 @@ your OK for Athleone to text your caregivers from our number."*
   goes live.
 - Not built yet: Gusto payroll, iPhone app store build (iPhone
   users can use Add to Home Screen), push notifications.
+
+
+---
+
+## What changed on 2026-09-26 (fax reading)
+
+- **Google Document AI without a key file.** On your Mac, run
+  `gcloud auth application-default login` once. On Cloud Run the app uses
+  its own identity. See `docs/FAX-INTAKE.md`.
+- **Fax Inbox review screen:**
+  - **What is this document?** An *Authorization notice* needs the
+    authorization #, overall status, start date, and hours or units. A
+    *Referral* can be approved without them and waits as "Awaiting
+    authorization".
+  - **Plan member ID vs Medicaid ID.** A plain "Member ID" goes to Plan
+    member ID. One click (audit-logged) confirms it as the Medicaid ID.
+  - **Service lines.** Every line on the fax is kept. You pick the primary
+    line, and the care plan is built from it.
+  - **Missing or doubtful IDs need a reason** before approving (see
+    `docs/FAX-INTAKE.md`).
+  - **Warnings for a wrong-agency fax:** the servicing provider or NPI isn't
+    yours.
+- **Care plan at intake.** Completing intake on a fax-sourced referral
+  creates the client's care plan (service authorization) from the fax.
+- **42 Document AI fields.** `node scripts/docai-set-schema.mjs --apply`
+  sets them on the processor. The field list is in
+  `docs/docai-schema-fields.csv`.
+- **Migrations this week:** `2026-09-26-01` (Fax Inbox), `-02` (hardening),
+  `-03` (referrals without an authorization #). Run `npm run db:migrate`
+  after pulling.
