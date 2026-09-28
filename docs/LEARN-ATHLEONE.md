@@ -69,8 +69,8 @@ on a phone, or in a narrow window.
    the checks: the hospital sample flags its missing authorization and hours.
    Click **Approve** to create the referral, then **Start Intake**. The
    Medicaid ID, address and dates are already filled in. **Submit**, and the
-   client appears under Clients. With Google Document AI connected, do the
-   same with a real fax or a phone photo of one.
+   client appears under Clients. Scanned faxes and phone photos need a
+   document-reading service, which isn't connected yet (see below).
 3. **Care plan** (`/admin/care-plans`). The authorization with its service
    code, units and approved tasks. This is what the caregiver's checklist and
    the billing lines come from.
@@ -210,7 +210,7 @@ includes reset links and sign-in codes, which lets you test those flows.
 | **DocuSign** | Built and tested end to end in the demo environment; Connect webhook added | The agency's DocuSign account (or yours), go-live review of the integration key, a signed DocuSign BAA before documents with client data are sent |
 | **HHAeXchange (Texas EVV)** | Payload mapping, sender, sandbox mock, export screen built | The agency's HHAeXchange/TMHP provider enrollment and API credentials, then HHAeXchange's certification testing |
 | **Payroll (Gusto Embedded)** | Planned, not built | Gusto partnership |
-| **Fax intake / OCR** | Built: Fax Inbox with demo reader + Google Document AI, review & approve (docs/FAX-INTAKE.md) | Google Cloud project + Document AI processor; a HIPAA fax service with a webhook and BAA |
+| **Fax intake / OCR** | Built: Fax Inbox with the demo reader (typed PDFs), review & approve (docs/FAX-INTAKE.md) | A document-reading service for scans (Azure AI Document Intelligence planned, with a BAA); a HIPAA fax service with a webhook and BAA |
 
 A good ask for the client after the demo: *"To test live, I need: your
 HHAeXchange provider credentials (sandbox first), a DocuSign account user, and
@@ -276,9 +276,6 @@ your OK for Athleone to text your caregivers from our number."*
 
 ## What changed on 2026-09-26 (fax reading)
 
-- **Google Document AI without a key file.** On your Mac, run
-  `gcloud auth application-default login` once. On Cloud Run the app uses
-  its own identity. See `docs/FAX-INTAKE.md`.
 - **Fax Inbox review screen:**
   - **What is this document?** An *Authorization notice* needs the
     authorization #, overall status, start date, and hours or units. A
@@ -294,9 +291,30 @@ your OK for Athleone to text your caregivers from our number."*
     yours.
 - **Care plan at intake.** Completing intake on a fax-sourced referral
   creates the client's care plan (service authorization) from the fax.
-- **42 Document AI fields.** `node scripts/docai-set-schema.mjs --apply`
-  sets them on the processor. The field list is in
-  `docs/docai-schema-fields.csv`.
+- **42 reader fields.** The field names a reading service's custom model
+  should use are in `docs/docai-schema-fields.csv`.
 - **Migrations this week:** `2026-09-26-01` (Fax Inbox), `-02` (hardening),
   `-03` (referrals without an authorization #). Run `npm run db:migrate`
   after pulling.
+
+---
+
+## What changed on 2026-09-28 (paid Google services removed)
+
+Ahead of the move to Azure, everything that called a paid Google service is
+gone: **Google Document AI** (`lib/docai/google.js`), the **Google sign-in**
+helper (`lib/google-auth.js`), the **Cloud Storage** file driver, the schema
+script (`scripts/docai-set-schema.mjs`) and the **Google Cloud deploy kit**
+(`deploy/gcp/`, `deploy/DEPLOY-GOOGLE-CLOUD.md`).
+
+- Fax reading uses the free demo reader (typed PDFs). Scans are entered by
+  hand until Azure AI Document Intelligence is connected; the plug-in point
+  is `ENGINES` in `lib/docai/index.js`.
+- Fax files are kept on local disk / a mounted volume (`STORAGE_DRIVER=local`).
+- Old settings are caught at startup: `STORAGE_DRIVER=gcs` stops a production
+  server, `DOCAI_PROVIDER=google` and leftover `GOOGLE_*`, `DOCAI_PROCESSOR_ID`
+  or `GCS_BUCKET` lines give a warning.
+- No database change. Documents already read by Google still show
+  "read by Google Document AI".
+- Still from Google, free and not a paid service: the Nunito/Karla web fonts
+  and "open in Google Maps" links.

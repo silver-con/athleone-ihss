@@ -21,13 +21,13 @@ shared browser state.
 ## Start here
 
 - **New to the codebase?** Read [`docs/LEARN-ATHLEONE.md`](docs/LEARN-ATHLEONE.md): roles, a client demo script, how the code fits together, and a glossary.
-- **Deploying?** [`deploy/DEPLOY-GOOGLE-CLOUD.md`](deploy/DEPLOY-GOOGLE-CLOUD.md) (Cloud Run, recommended with Document AI) or [`deploy/DEPLOY-DIGITALOCEAN.md`](deploy/DEPLOY-DIGITALOCEAN.md).
+- **Deploying?** [`deploy/DEPLOY-DIGITALOCEAN.md`](deploy/DEPLOY-DIGITALOCEAN.md) (Docker). An Azure kit is planned; the Google Cloud kit was removed on 2026-09-28.
 - **Phone app?** [`mobile/README.md`](mobile/README.md): install from the website, or build the Android APK on GitHub.
 - **Something broken?** [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
 
 ### Added 2026-09-26
 
-- **Fax Inbox** (`/inbox`): faxes arrive by webhook or upload, **Google Document AI** (or a no-account demo reader) fills in the referral, and a coordinator checks it side by side and approves. See [`docs/FAX-INTAKE.md`](docs/FAX-INTAKE.md).
+- **Fax Inbox** (`/inbox`): faxes arrive by webhook or upload, a reader fills in the referral (today the no-cost demo reader for typed PDFs; Google Document AI was removed 2026-09-28 ahead of the move to Azure), and a coordinator checks it side by side and approves. See [`docs/FAX-INTAKE.md`](docs/FAX-INTAKE.md).
 - The app is now called **Athleone**.
 
 ### Added 2026-09-25
@@ -284,11 +284,9 @@ components/                        Shared UI (StatTile, charts, Toast, per-role
 
 ## Deploying
 
-Two supported targets:
+Supported today (the Google Cloud kit was removed on 2026-09-28; an Azure
+kit is planned):
 
-- **Google Cloud** (Cloud Run + Cloud SQL + Cloud Storage + Document AI, one BAA):
-  [`deploy/DEPLOY-GOOGLE-CLOUD.md`](deploy/DEPLOY-GOOGLE-CLOUD.md) —
-  `PROJECT_ID=… bash deploy/gcp/setup.sh` in Cloud Shell.
 - **DigitalOcean** (one Droplet with Docker + Caddy):
   [`deploy/DEPLOY-DIGITALOCEAN.md`](deploy/DEPLOY-DIGITALOCEAN.md). In
 short, on a fresh Ubuntu Droplet: `sudo bash deploy/setup-droplet.sh`. It

@@ -103,12 +103,13 @@ for extra in sign-in.js messaging.js inbound-sms.js docusign-connect.js format-t
     sed -i.bak -e "s|from '@/lib/comms'|from './comms/index.js'|" -e "s|from '@/lib/comms/\([a-z0-9-]*\)'|from './comms/\1.js'|" -e "s|from '@/lib/queries'|from './queries.js'|" -e "s|from '@/lib/passwords'|from './passwords.js'|" -e "s|from '@/lib/messaging'|from './messaging.js'|" "$WORK/$extra" && rm -f "$WORK/$extra.bak"
   fi
 done
-# 2026-09-26: fax intake — lib/docai/, storage, Google auth, the pipeline.
+# 2026-09-26: fax intake — lib/docai/, storage, the pipeline (Google removed
+# 2026-09-28), plus the startup check that refuses old Google settings.
 mkdir -p "$WORK/docai"
 cp "$REPO"/lib/docai/*.js "$WORK/docai/"
-cp "$REPO/lib/storage.js" "$REPO/lib/google-auth.js" "$REPO/lib/intake.js" "$WORK/"
-sed -i.bak -e "s|from '@/lib/docai/\([a-z0-9-]*\)'|from './\1.js'|" -e "s|from '@/lib/google-auth'|from '../google-auth.js'|" "$WORK"/docai/*.js && rm -f "$WORK"/docai/*.bak
-sed -i.bak -e "s|from '@/lib/google-auth'|from './google-auth.js'|" -e "s|from '@/lib/queries'|from './queries.js'|" -e "s|from '@/lib/storage'|from './storage.js'|" -e "s|from '@/lib/docai'|from './docai/index.js'|" "$WORK/storage.js" "$WORK/intake.js" && rm -f "$WORK"/*.bak
+cp "$REPO/lib/storage.js" "$REPO/lib/intake.js" "$REPO/lib/env-check.js" "$WORK/"
+sed -i.bak -e "s|from '@/lib/docai/\([a-z0-9-]*\)'|from './\1.js'|" "$WORK"/docai/*.js && rm -f "$WORK"/docai/*.bak
+sed -i.bak -e "s|from '@/lib/queries'|from './queries.js'|" -e "s|from '@/lib/storage'|from './storage.js'|" -e "s|from '@/lib/docai'|from './docai/index.js'|" "$WORK/storage.js" "$WORK/intake.js" && rm -f "$WORK"/*.bak
 mkdir -p "$WORK/sample-faxes" && cp "$REPO"/scripts/sample-faxes/*.pdf "$WORK/sample-faxes/"
 
 for suite in "$QA_DIR"/qa-2026-09-2[5-9]-*.mjs; do
