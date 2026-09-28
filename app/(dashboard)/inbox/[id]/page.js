@@ -5,6 +5,7 @@ import { hasPermission } from '@/lib/permissions';
 import { getIncomingDocument, findIntakeDuplicates, getOrganization } from '@/lib/queries';
 import ReviewForm from '@/components/intake/ReviewForm';
 import { documentTypeFromClassifier } from '@/lib/docai/fields';
+import { engineName } from '@/lib/docai';
 import RetryButton from '@/components/intake/RetryButton';
 import RejectForm from '@/components/intake/RejectForm';
 
@@ -45,7 +46,7 @@ export default async function ReviewDocumentPage({ params }) {
             {doc.source === 'fax' ? `Fax${doc.sender ? ` from ${doc.sender}` : ''}` : doc.source === 'sample' ? 'Sample fax' : 'Uploaded'} ·{' '}
             {new Date(doc.receivedAt).toLocaleString('en-US', { timeZone: 'America/Chicago' })}
             {doc.docType && doc.docType !== 'other' ? ` · looks like ${/^[aeiou]/i.test(doc.docType) ? 'an' : 'a'} ${doc.docType}` : ''}
-            {doc.engine ? ` · read by ${doc.engine === 'google-docai' ? 'Google Document AI' : 'demo mode'}` : ''}
+            {doc.engine ? ` · read by ${engineName(doc.engine)}` : ''}
           </p>
         </div>
         <a href={`${fileUrl}?download=1`} className="text-[12.5px] font-display font-bold text-[var(--accent)]">
@@ -120,15 +121,15 @@ export default async function ReviewDocumentPage({ params }) {
             />
           )}
 
-          {doc.engine === 'google-docai' && Array.isArray(doc.extraction?.entityTypes) && (
+          {doc.engine !== 'demo' && Array.isArray(doc.extraction?.entityTypes) && (
             <details className="mt-4 bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-4" open={!doc.extraction.entityTypes.some((e) => e.field)}>
               <summary className="cursor-pointer font-display font-bold text-[12.5px]">
-                Fields Google returned ({doc.extraction.entityTypes.filter((e) => e.field).length} used of {doc.extraction.entityTypes.length})
+                Fields the reader returned ({doc.extraction.entityTypes.filter((e) => e.field).length} used of {doc.extraction.entityTypes.length})
               </summary>
               {doc.extraction.entityTypes.length === 0 ? (
                 <p className="mt-2 text-[12.5px]">
-                  Google returned <strong>no fields</strong>. Everything above came from Athleone reading the printed labels. In Document AI, check the
-                  processor&rsquo;s schema has fields saved and a version is deployed and set as default (docs/FAX-INTAKE.md).
+                  The reader returned <strong>no named fields</strong>. Everything above came from Athleone reading the printed labels. Check the
+                  reading service&rsquo;s field list uses the names in docs/docai-schema-fields.csv (docs/FAX-INTAKE.md).
                 </p>
               ) : (
                 <ul className="mt-2 text-[12.5px] space-y-0.5">
