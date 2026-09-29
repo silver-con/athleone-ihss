@@ -1,12 +1,10 @@
 // QA for fax / document intake (2026-09-26): reading the sample faxes,
 // field mapping, validation, the store -> read -> review -> approve pipeline,
-// duplicates, tenant isolation, and the Google Document AI / Cloud Storage /
-// Google sign-in code paths (with a fake fetch — Google is never called).
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+// duplicates, tenant isolation, the reading-engine plug-in (with a fake
+// engine) and local file storage.
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { generateKeyPairSync } from 'node:crypto';
-import { decodeJwt, decodeProtectedHeader } from 'jose';
 
 process.env.STORAGE_DIR = mkdtempSync(path.join(tmpdir(), 'athleone-storage-'));
 for (const k of ['DOCAI_PROVIDER', 'GOOGLE_CLOUD_PROJECT', 'DOCAI_PROCESSOR_ID', 'DOCAI_LOCATION', 'GOOGLE_APPLICATION_CREDENTIALS', 'GOOGLE_SERVICE_ACCOUNT_JSON', 'STORAGE_DRIVER', 'GCS_BUCKET']) delete process.env[k];
@@ -16,8 +14,6 @@ const { query, queryOne, pool } = await import('./db.js');
 const { readDocument, docaiStatus } = await import('./docai/index.js');
 const { fieldsFromEntities, fieldsFromText, formFieldLines, normalizeName, normalizeHours, normalizeDate, normalizeFields, classifyDocument } = await import('./docai/parse.js');
 const { validateFields, hasBlockingIssues } = await import('./docai/validate.js');
-const { extractWithGoogle, processUrl, googleDocaiConfig } = await import('./docai/google.js');
-const { getGoogleAccessToken, clearGoogleTokenCache } = await import('./google-auth.js');
 const { putFile, getFile } = await import('./storage.js');
 const { ingestDocument, processDocument, sniffMimeType } = await import('./intake.js');
 const { sampleFaxesEnabled } = await import('./docai/samples.js');
@@ -74,7 +70,7 @@ async function run() {
   check('hospital: no Medicaid ID is only a warning', hi.medicaidId?.every((i) => i.level === 'warn'));
   eq('hospital: single-digit DOB padded', hosp.fields.dob.value, '07/02/1938');
 
-  await throws('demo mode refuses an image with a clear message', () => readDocument(Buffer.from([0x89, 0x50, 0x4e, 0x47]), 'image/png'), 'Google Document AI');
+  await throws('demo mode refuses an image with a clear message', () => readDocument(Buffer.from([0x89, 0x50, 0x4e, 0x47]), 'image/png'), 'enter this one by hand');
 
   console.log('\n== mapping helpers ==');
   eq('entity mapping (Custom Extractor names)', fieldsFromEntities([
@@ -187,141 +183,46 @@ async function run() {
   await throws("a rejected document can't be approved", () => db.approveIncomingDocument(ORG, h.id, { fields: good, reviewer: {} }), 'isn’t ready');
   const img = await ingestDocument({ organizationId: ORG, buffer: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64)]), fileName: 'photo.jpg', source: 'upload' });
   const pimg = await processDocument(ORG, img.id);
-  check('a photo in demo mode fails with a readable reason', !pimg.ok && /Google Document AI/.test(pimg.error));
+  check('a photo in demo mode fails with a readable reason', !pimg.ok && /enter this one by hand/.test(pimg.error));
   eq('  ...status failed (can be retried)', (await db.getIncomingDocument(ORG, img.id)).status, 'failed');
   eq('  ...and counts as still to review', await db.countIncomingDocumentsToReview(ORG), 1);
 
-  console.log('\n== Google Document AI (fake fetch) ==');
-  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-  const saJson = JSON.stringify({ client_email: 'docai@proj.iam.gserviceaccount.com', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }), private_key_id: 'kid1', token_uri: 'https://oauth2.googleapis.com/token', project_id: 'proj' });
-  const env = { DOCAI_PROVIDER: 'google', GOOGLE_CLOUD_PROJECT: 'proj', DOCAI_PROCESSOR_ID: 'abc123', DOCAI_LOCATION: 'us', GOOGLE_SERVICE_ACCOUNT_JSON: saJson };
-  eq('status: missing settings named', docaiStatus({ DOCAI_PROVIDER: 'google' }).missing, ['GOOGLE_CLOUD_PROJECT', 'DOCAI_PROCESSOR_ID']);
-  check('status: live with project + processor', docaiStatus(env).live);
-  eq('process URL', processUrl(googleDocaiConfig(env)), 'https://us-documentai.googleapis.com/v1/projects/proj/locations/us/processors/abc123:process');
-  eq('process URL with a pinned version', processUrl(googleDocaiConfig({ ...env, DOCAI_PROCESSOR_VERSION: 'v2' })), 'https://us-documentai.googleapis.com/v1/projects/proj/locations/us/processors/abc123/processorVersions/v2:process');
+  console.log('\n== Reading-engine plug-in (fake engine; Google removed 2026-09-28) ==');
+  eq('status: demo by default', [docaiStatus({}).provider, docaiStatus({}).live, docaiStatus({}).unsupported], ['demo', false, false]);
+  eq('status: an old DOCAI_PROVIDER=google falls back to demo, and says so', [docaiStatus({ DOCAI_PROVIDER: 'google' }).provider, docaiStatus({ DOCAI_PROVIDER: 'google' }).unsupported], ['demo', true]);
+  const fakeEngine = async () => ({ engine: 'fake-engine', pageCount: 1,
+    text: 'SERVICE AUTHORIZATION\nMember Name: Wrong From Text\nAuth #: TXT-1\n',
+    entities: [
+      { type: 'client_name', mentionText: 'Maria Lopez', confidence: 0.98, pageAnchor: { pageRefs: [{}] } },
+      { type: 'date_of_birth', mentionText: '4/5/1950', confidence: 0.95 },
+      { type: 'medicaid_id', mentionText: '111 222 333', confidence: 0.52 },
+      { type: 'not_a_known_field', mentionText: 'x' },
+    ] });
+  const g = await readDocument(Buffer.from('%PDF-fake'), 'application/pdf', { extract: fakeEngine });
+  eq('the engine name is kept', g.engine, 'fake-engine');
+  eq('named fields win over text', g.fields.clientName.value, 'Maria Lopez');
+  eq('field dates normalised', g.fields.dob.value, '04/05/1950');
+  eq('text fills what the engine missed', g.fields.authNumber.value, 'TXT-1');
+  check('low-confidence field flagged for review', validateFields(g.fields).medicaidId?.some((i) => i.level === 'warn'));
+  check('the review screen lists what the engine returned', g.entityTypes?.some((e) => e.name === 'client_name' && e.field === 'clientName') && g.entityTypes?.some((e) => e.name === 'not_a_known_field' && !e.field));
+  const demoRead = await readDocument(molinaBuf, 'application/pdf');
+  eq('demo mode reports no engine field list', demoRead.entityTypes, null);
+  const { engineName } = await import('./docai/index.js');
+  eq('older documents still show who read them', [engineName('demo'), engineName('google-docai')], ['demo mode', 'Google Document AI']);
 
-  const calls = [];
-  const fakeGoogle = async (url, init = {}) => {
-    calls.push({ url, init });
-    if (url === 'https://oauth2.googleapis.com/token') return Response.json({ access_token: 'ya29.fake', expires_in: 3600 });
-    if (url.includes(':process')) {
-      return Response.json({ document: { text: 'SERVICE AUTHORIZATION\nMember Name: Wrong From Text\nAuth #: TXT-1\n', pages: [{ pageNumber: 1 }], entities: [
-        { type: 'client_name', mentionText: 'Maria Lopez', confidence: 0.98, pageAnchor: { pageRefs: [{}] } },
-        { type: 'date_of_birth', mentionText: '4/5/1950', confidence: 0.95 },
-        { type: 'medicaid_id', mentionText: '111 222 333', confidence: 0.52 },
-      ] } });
-    }
-    throw new Error('unexpected ' + url);
-  };
-  clearGoogleTokenCache();
-  const g = await readDocument(Buffer.from('%PDF-fake'), 'application/pdf', { fetchImpl: fakeGoogle, env });
-  eq('engine is google', g.engine, 'google-docai');
-  eq('entities win over text', g.fields.clientName.value, 'Maria Lopez');
-  eq('entity dates normalised', g.fields.dob.value, '04/05/1950');
-  eq('text fills what entities missed', g.fields.authNumber.value, 'TXT-1');
-  check('low-confidence entity flagged for review', validateFields(g.fields).medicaidId?.some((i) => i.level === 'warn'));
-  const tokenCall = calls.find((c) => c.url.includes('oauth2'));
-  const assertion = new URLSearchParams(tokenCall.init.body.toString()).get('assertion');
-  const claims = decodeJwt(assertion);
-  eq('service-account JWT: issuer, audience, scope', [claims.iss, claims.aud, claims.scope], ['docai@proj.iam.gserviceaccount.com', 'https://oauth2.googleapis.com/token', 'https://www.googleapis.com/auth/cloud-platform']);
-  eq('  ...signed RS256 with the key id', [decodeProtectedHeader(assertion).alg, decodeProtectedHeader(assertion).kid], ['RS256', 'kid1']);
-  const procCall = calls.find((c) => c.url.includes(':process'));
-  eq('  ...Document AI called with the bearer token', procCall.init.headers.Authorization, 'Bearer ya29.fake');
-  eq('  ...and the file as base64 with its type', JSON.parse(procCall.init.body).rawDocument, { content: Buffer.from('%PDF-fake').toString('base64'), mimeType: 'application/pdf' });
-  calls.length = 0;
-  await readDocument(Buffer.from('%PDF-fake'), 'application/pdf', { fetchImpl: fakeGoogle, env });
-  eq('the access token is reused (cached)', calls.filter((c) => c.url.includes('oauth2')).length, 0);
-
-  let maskRetry = 0;
-  const maskFetch = async (url, init) => {
-    if (url.includes('oauth2')) return Response.json({ access_token: 't', expires_in: 3600 });
-    const body = JSON.parse(init.body);
-    if (body.fieldMask) { maskRetry++; return Response.json({ error: { message: 'Invalid field mask' } }, { status: 400 }); }
-    return Response.json({ document: { text: 'Member Name: Ok Now', pages: [{}] } });
-  };
-  clearGoogleTokenCache();
-  const gm = await readDocument(Buffer.from('%PDF'), 'application/pdf', { fetchImpl: maskFetch, env });
-  check('a processor that rejects the field mask is retried without it', maskRetry === 1 && gm.fields.clientName.value === 'Ok Now');
-  const errFetch = async (url) => (url.includes('oauth2') ? Response.json({ access_token: 't', expires_in: 3600 }) : Response.json({ error: { message: 'Processor not found' } }, { status: 404 }));
-  clearGoogleTokenCache();
-  await throws('a Google error is reported in plain words', () => readDocument(Buffer.from('%PDF'), 'application/pdf', { fetchImpl: errFetch, env }), 'Processor not found');
-  await throws('missing settings are named before calling Google', () => extractWithGoogle(Buffer.from('%PDF'), 'application/pdf', { env: { DOCAI_PROVIDER: 'google' } }), 'GOOGLE_CLOUD_PROJECT');
-
-  clearGoogleTokenCache();
-  const meta = [];
-  const metaFetch = async (url, init) => { meta.push({ url, init }); return Response.json({ access_token: 'from-metadata', expires_in: 3000 }); };
-  eq('no key configured: the Cloud Run metadata server is used', await getGoogleAccessToken({ fetchImpl: metaFetch, env: {} }), 'from-metadata');
-  check('  ...with the Metadata-Flavor header', meta[0].url.includes('metadata.google.internal') && meta[0].init.headers['Metadata-Flavor'] === 'Google');
-  clearGoogleTokenCache();
-  await throws('no key and not on Google Cloud: a clear message', () => getGoogleAccessToken({ fetchImpl: async () => { throw new Error('ENOTFOUND'); }, env: {} }), 'GOOGLE_APPLICATION_CREDENTIALS');
-
-  console.log('\n== Cloud Storage driver (fake fetch) ==');
-  clearGoogleTokenCache();
-  const gcs = [];
-  const gcsFetch = async (url, init = {}) => {
-    gcs.push({ url, init });
-    if (url.includes('oauth2')) return Response.json({ access_token: 'gcs-token', expires_in: 3600 });
-    if (init.method === 'POST') return Response.json({ name: 'x' });
-    return new Response(Buffer.from('stored-bytes'));
-  };
-  const genv = { STORAGE_DRIVER: 'gcs', GCS_BUCKET: 'athleone-faxes', GOOGLE_SERVICE_ACCOUNT_JSON: saJson };
-  await putFile('org-1/incoming/doc.pdf', Buffer.from('abc'), 'application/pdf', { fetchImpl: gcsFetch, env: genv });
-  const up = gcs.find((c) => c.init.method === 'POST' && c.url.includes('/upload/'));
-  eq('upload goes to the bucket with the object name encoded', up.url, 'https://storage.googleapis.com/upload/storage/v1/b/athleone-faxes/o?uploadType=media&ifGenerationMatch=0&name=org-1%2Fincoming%2Fdoc.pdf');
-  eq('  ...authorised', up.init.headers.Authorization, 'Bearer gcs-token');
-  const got = await getFile('org-1/incoming/doc.pdf', { fetchImpl: gcsFetch, env: genv });
-  eq('download returns the bytes', got.toString(), 'stored-bytes');
+  console.log('\n== Local file storage ==');
+  await putFile('org-1/incoming/doc.pdf', Buffer.from('abc'), 'application/pdf');
+  eq('bytes round-trip on local disk', (await getFile('org-1/incoming/doc.pdf')).toString(), 'abc');
   await throws('a key trying to escape the folder is refused', () => putFile('org-1/../../etc/passwd', Buffer.from('x'), 'text/plain'), 'Bad storage key');
-  await throws('gcs without a bucket is refused', () => putFile('a/b.pdf', Buffer.from('x'), 'application/pdf', { env: { STORAGE_DRIVER: 'gcs' } }), 'GCS_BUCKET');
-  await throws('  ...also for downloads', () => getFile('a/b.pdf', { env: { STORAGE_DRIVER: 'gcs' } }), 'GCS_BUCKET');
-
-  console.log('\n== Personal gcloud login (no key file) ==');
+  await throws('an old STORAGE_DRIVER=gcs is refused, not silently written locally', () => putFile('a/b.pdf', Buffer.from('x'), 'application/pdf', { env: { STORAGE_DRIVER: 'gcs' } }), 'not available');
+  await throws('  ...also for downloads', () => getFile('a/b.pdf', { env: { STORAGE_DRIVER: 'gcs' } }), 'not available');
   {
-    const dir = mkdtempSync(path.join(tmpdir(), 'athleone-gcloud-'));
-    writeFileSync(path.join(dir, 'application_default_credentials.json'), JSON.stringify({ type: 'authorized_user', client_id: 'cid', client_secret: 'csec', refresh_token: 'rtok-12345678', quota_project_id: 'quota-proj' }));
-    const uenv = { CLOUDSDK_CONFIG: dir, GOOGLE_CLOUD_PROJECT: 'athleone', DOCAI_PROVIDER: 'google', DOCAI_PROCESSOR_ID: 'proc1', DOCAI_LOCATION: 'us' };
-    const calls = [];
-    const ufetch = async (url, init = {}) => {
-      calls.push({ url, init });
-      if (url.includes('oauth2')) return Response.json({ access_token: 'user-token', expires_in: 3600 });
-      return Response.json({ document: { text: 'Member Name: Test Person\n', entities: [{ type: 'client_name', mentionText: 'Test Person', confidence: 0.95 }], pages: [{ pageNumber: 1 }] } });
-    };
-    clearGoogleTokenCache();
-    const { googleCredentialSource } = await import('./google-auth.js');
-    check('the gcloud login file is found', googleCredentialSource(uenv).includes('gcloud login'), googleCredentialSource(uenv));
-    const ur = await extractWithGoogle(Buffer.from('%PDF-1.4 x'), 'application/pdf', { fetchImpl: ufetch, env: uenv });
-    const tok = calls.find((c) => c.url.includes('oauth2'));
-    check('  ...signs in with the refresh token', String(tok?.init?.body).includes('grant_type=refresh_token'));
-    const api = calls.find((c) => c.url.includes('documentai'));
-    eq('  ...calls Document AI with the user token', api?.init?.headers?.Authorization, 'Bearer user-token');
-    eq('  ...and names the project to bill', api?.init?.headers?.['x-goog-user-project'], 'athleone');
-    check('  ...and reads the fields', JSON.stringify(ur).includes('Test Person'));
-    const onRun = { ...uenv, K_SERVICE: 'athleone' };
-    check('on Cloud Run a stray login file is ignored', googleCredentialSource(onRun).includes('metadata'));
-    clearGoogleTokenCache();
-  }
-
-  console.log('\n== Google rejects the field mask with a plain "invalid argument" ==');
-  {
-    let n = 0;
-    const bodies = [];
-    const mfetch = async (url, init = {}) => {
-      if (url.includes('oauth2')) return Response.json({ access_token: 't', expires_in: 3600 });
-      n++;
-      bodies.push(JSON.parse(init.body));
-      if (n === 1) return Response.json({ error: { code: 400, message: 'Request contains an invalid argument.', status: 'INVALID_ARGUMENT' } }, { status: 400 });
-      return Response.json({ document: { text: 'x', entities: [{ type: 'client_name', mentionText: 'Masked Retry', confidence: 0.9 }], pages: [{ pageNumber: 1 }] } });
-    };
-    clearGoogleTokenCache();
-    const menv = { GOOGLE_SERVICE_ACCOUNT_JSON: saJson, GOOGLE_CLOUD_PROJECT: 'p', DOCAI_PROCESSOR_ID: 'x', DOCAI_PROVIDER: 'google' };
-    const mr = await extractWithGoogle(Buffer.from('%PDF'), 'application/pdf', { fetchImpl: mfetch, env: menv });
-    check('a plain 400 is retried without the field mask', n === 2 && 'fieldMask' in bodies[0] && !('fieldMask' in bodies[1]));
-    check('  ...and the retry\'s result is used', JSON.stringify(mr).includes('Masked Retry'));
-    const efetch = async (url) => url.includes('oauth2') ? Response.json({ access_token: 't', expires_in: 3600 })
-      : Response.json({ error: { code: 400, message: 'Request contains an invalid argument.', details: [{ '@type': 'type.googleapis.com/google.rpc.BadRequest', fieldViolations: [{ field: 'processor', description: 'Processor has no deployed version' }] }] } }, { status: 400 });
-    clearGoogleTokenCache();
-    await throws('Google\'s explanation is shown to the reviewer', () => extractWithGoogle(Buffer.from('%PDF'), 'application/pdf', { fetchImpl: efetch, env: menv }), 'no deployed version');
-    clearGoogleTokenCache();
+    const { checkEnvironment } = await import('./env-check.js');
+    const base = { DATABASE_URL: 'postgres://x', SESSION_SECRET: 'a'.repeat(40), EVV_CREDENTIALS_KEY: 'a'.repeat(64) };
+    const r = checkEnvironment({ ...base, STORAGE_DRIVER: 'gcs', DOCAI_PROVIDER: 'google', GCS_BUCKET: 'b', GOOGLE_CLOUD_PROJECT: 'p' });
+    check('startup check: STORAGE_DRIVER=gcs stops a production start', r.errors.some((e) => e.includes('STORAGE_DRIVER=gcs')));
+    check('startup check: DOCAI_PROVIDER=google and leftover Google settings are named', r.warnings.some((w) => w.includes('DOCAI_PROVIDER=google')) && r.warnings.some((w) => w.includes('GCS_BUCKET') && w.includes('GOOGLE_CLOUD_PROJECT')));
+    check('startup check: a clean config has none of these', !checkEnvironment(base).errors.length);
   }
 
   console.log('\n== Real-world layouts (Molina-style authorization, fictional values) ==');
@@ -336,7 +237,7 @@ async function run() {
     const nf = normalizeFields(fieldsFromEntities(nested));
     eq('nested Custom Extractor fields are read', [nf.clientName?.value, nf.dob?.value], ['Jane Q Doe', '03/03/1941']);
     const sum = entitySummary(nested);
-    check('the review screen can list what Google returned', sum.some((e) => e.name === 'client_name' && e.field === 'clientName') && sum.some((e) => e.name === 'member_dob_extra' && !e.field));
+    check('the review screen can list what the engine returned', sum.some((e) => e.name === 'client_name' && e.field === 'clientName') && sum.some((e) => e.name === 'member_dob_extra' && !e.field));
     const molina = [
       'Utilization Management', 'Phone: (800) 555-0100', 'Fax Coversheet', 'To: SAMPLE HOME CARE LLC',
       '\f',
@@ -403,19 +304,6 @@ async function run() {
     eq('  ...stored for the new client', [sa?.client_id, sa?.service_code, sa?.modifier_codes, Number(sa?.total_units_per_week), sa?.start_date, sa?.status, sa?.purchased_tasks], [res.clientId, 'S5125', 'U5', 116, '2026-09-01', 'approved', ['Bathing', 'Dressing']]);
   }
 
-  console.log('\n== Google page breaks (cover sheet on page 1) ==');
-  {
-    const { pagedText } = await import('./docai/google.js');
-    const t = 'Fax Coversheet\nPhone: (800) 555-0100\nMember Phone: (214) 555-0199\n';
-    const cut = t.indexOf('Member');
-    const doc = { text: t, pages: [{ layout: { textAnchor: { textSegments: [{ startIndex: 0, endIndex: cut }] } } }, { layout: { textAnchor: { textSegments: [{ startIndex: cut, endIndex: t.length }] } } }] };
-    const pt = pagedText(doc);
-    check('pages are separated with form feeds', pt.split('\f').length === 2);
-    const gf = normalizeFields(fieldsFromText(pt, { confidence: 0.7 }));
-    eq('  ...so the cover sheet phone is skipped', [gf.phone?.value, gf.phone?.page], ['(214) 555-0199', 2]);
-    eq('a one-page document keeps its text as is', pagedText({ text: 'abc', pages: [{}] }), 'abc');
-  }
-
   console.log('\n== Referral, provider, schedule and contact fields (fictional values) ==');
   {
     const { validNpi } = await import('./docai/validate.js');
@@ -464,11 +352,11 @@ async function run() {
     const t3 = normalizeFields(fieldsFromText('Member ID (Medicaid): 618-203-554', { confidence: 0.7 }));
     eq('"Member ID (Medicaid)" is the Medicaid ID, not the plan member ID', [t3.medicaidId?.value, t3.planMemberId?.value], ['618203554', undefined]);
     const t4 = normalizeFields(fieldsFromEntities([{ type: 'member_id', mentionText: '900000125', confidence: 0.9 }, { type: 'health_plan_id', mentionText: 'x' }]));
-    eq('Google member_id / health_plan_id -> plan member ID', [t4.medicaidId?.value, t4.planMemberId?.value], [undefined, '900000125']);
+    eq('engine member_id / health_plan_id -> plan member ID', [t4.medicaidId?.value, t4.planMemberId?.value], [undefined, '900000125']);
     const gtext = 'Health Plan ID: 900000126\nMedicaid ID: 900000127\n';
     const at = (v) => gtext.indexOf(v);
     const moved = checkMedicaidProvenance(fieldsFromEntities([{ type: 'medicaid_id', mentionText: '900000126', confidence: 0.9, textAnchor: { textSegments: [{ startIndex: at('900000126') }] } }]), gtext);
-    check('Google medicaid_id printed next to "Health Plan ID" is moved to the plan member ID', !moved.medicaidId && moved.planMemberId?.value === '900000126' && /confirm/i.test(moved.planMemberId.note || ''));
+    check('engine medicaid_id printed next to "Health Plan ID" is moved to the plan member ID', !moved.medicaidId && moved.planMemberId?.value === '900000126' && /confirm/i.test(moved.planMemberId.note || ''));
     const kept = checkMedicaidProvenance(fieldsFromEntities([{ type: 'medicaid_id', mentionText: '900000127', confidence: 0.9, textAnchor: { textSegments: [{ startIndex: at('900000127') }] } }]), gtext);
     eq('  ...one printed next to "Medicaid ID" stays', kept.medicaidId?.value, '900000127');
 
@@ -513,7 +401,7 @@ async function run() {
     eq('table rows become lines', tbl.map((l) => [l.serviceCode, l.modifier, l.unitsPerWeek, l.totalUnits, l.frequencyPeriod, l.authStart, l.authEnd, l.lineStatus]),
       [['S5125', 'U5', '116', '2555', 'Week', '09/01/2026', '09/30/2027', 'Approved'], ['T1019', 'U6', '10', '100', 'Week', '10/01/2026', '12/31/2026', 'Denied']]);
     const rep = linesFromEntities([{ type: 'procedure_code', mentionText: 'S5125' }, { type: 'procedure_code', mentionText: 'S5150' }, { type: 'units_per_week', mentionText: '116' }, { type: 'units_per_week', mentionText: '8' }]);
-    eq('a field Google returns twice becomes a second line', [rep.first.serviceCode, rep.extra.map((l) => [l.serviceCode, l.unitsPerWeek])], ['S5125', [['S5150', '8']]]);
+    eq('a field the engine returns twice becomes a second line', [rep.first.serviceCode, rep.extra.map((l) => [l.serviceCode, l.unitsPerWeek])], ['S5125', [['S5150', '8']]]);
     const par = linesFromEntities([{ type: 'service_line', properties: [{ type: 'service_code', mentionText: 'S5125 U5' }, { type: 'line_status', mentionText: 'APPROVED' }] }, { type: 'service_line', properties: [{ type: 'service_code', mentionText: 'S5150' }] }]);
     eq('future service_line parent fields are read as lines', par.parents.map((l) => [l.serviceCode, l.modifier || null, l.lineStatus || null]), [['S5125', 'U5', 'Approved'], ['S5150', null, null]]);
     const fields1 = { service: { value: 'ATTENDANT CARE SERVICES' }, serviceCode: { value: 'S5125 U5' }, unitsPerWeek: { value: '116' }, authStart: { value: '09/01/2026' }, authEnd: { value: '09/30/2027' } };
@@ -535,6 +423,59 @@ async function run() {
     eq('both lines are kept on the referral, line 2 as primary', [tr.fax.serviceLines.length, tr.fax.primaryLine, tr.fax.serviceLines[1].serviceCode, tr.fax.serviceLines[1].reviewed, tr.fax.serviceLines[0].serviceCode], [2, 1, 'S5150', true, 'S5125']);
     const cp = authorizationFromFax(tr, 'c-x');
     check('the care plan comes from the primary line and lists the other one', cp.serviceCode === 'S5150' && /1 other service line/.test(cp.notes) && /S5125 U5/.test(cp.notes), cp.notes);
+  }
+
+  console.log('\n== Missing or doubtful IDs need an acknowledgment ==');
+  {
+    const { idChecks, unacknowledged, acknowledgmentRecords, acknowledgmentSummary, openMissingIds, reasonsFor } = await import('./docai/id-checks.js');
+    const { authorizationFromFax } = await import('./fax-authorization.js');
+    const F = (o) => Object.fromEntries(Object.entries(o).map(([k, x]) => [k, typeof x === 'object' ? x : { value: x, confidence: 0.9, source: 'engine' }]));
+    const o = { checkConfidence: false, today: new Date('2026-09-26') };
+    const base = { clientName: 'A B', dob: '01/01/1950', payer: 'P', service: 'Personal care', diagnosis: 'D' };
+
+    // A referral with no IDs at all
+    const refFields = F(base);
+    const refChecks = idChecks(refFields, validateFields(refFields, { ...o, documentType: 'referral' }));
+    eq('a referral missing every key ID lists all four as missing', refChecks.map((c) => [c.key, c.state]), [['medicaidId', 'missing'], ['authNumber', 'missing'], ['serviceCode', 'missing'], ['diagnosisCode', 'missing']]);
+    eq('  ...and none are acknowledged yet', unacknowledged(refChecks, {}).length, 4);
+
+    // As an authorization, the empty auth # is BLOCKED (must be entered), not acknowledgeable
+    const authChecks = idChecks(refFields, validateFields(refFields, { ...o, documentType: 'authorization' }));
+    check('on an authorization notice a missing auth # is blocked, not acknowledged', !authChecks.some((c) => c.key === 'authNumber'));
+
+    // Doubtful values
+    const doubt = F({ ...base, medicaidId: { value: '12345', confidence: 0.95, source: 'engine' }, planMemberId: { value: '900000555', confidence: 0.4, source: 'engine' }, providerNpi: '1234567890', caseId: { value: 'LTSS-1', confidence: 0.95, source: 'engine' } });
+    const dChecks = idChecks(doubt, validateFields(doubt, { ...o, documentType: 'referral' }));
+    check('a Medicaid ID in the wrong format is not acknowledgeable (it blocks)', !dChecks.some((c) => c.key === 'medicaidId'));
+    check('a low-confidence plan member ID needs checking', dChecks.some((c) => c.key === 'planMemberId' && c.state === 'doubtful' && /low confidence/i.test(c.detail)));
+    check('an NPI failing its check digit needs checking', dChecks.some((c) => c.key === 'providerNpi' && c.state === 'doubtful'));
+    check('a confident case ID needs nothing', !dChecks.some((c) => c.key === 'caseId'));
+    const edited = F({ ...base, planMemberId: { value: '900000555', confidence: 0.4, source: 'reviewer' } });
+    check('a value the reviewer typed or corrected counts as checked', !idChecks(edited, validateFields(edited, { ...o, documentType: 'referral' })).some((c) => c.key === 'planMemberId'));
+
+    // Reasons
+    const acks = { medicaidId: { reason: 'pending_payer' }, authNumber: { reason: 'not_on_fax' }, serviceCode: { reason: 'other' }, diagnosisCode: { reason: 'checked' } };
+    eq('"Other" needs a note, and "checked" isn\'t a reason for a missing ID', unacknowledged(refChecks, acks).map((c) => c.key), ['serviceCode', 'diagnosisCode']);
+    check('"Checked against the fax" is offered only for doubtful values', reasonsFor('doubtful').some(([k]) => k === 'checked') && !reasonsFor('missing').some(([k]) => k === 'checked'));
+    const good = { ...acks, serviceCode: { reason: 'other', note: 'plan will send the code' }, diagnosisCode: { reason: 'from_client' } };
+    eq('with valid reasons, nothing is left', unacknowledged(refChecks, good).length, 0);
+    const records = acknowledgmentRecords(refChecks, good);
+    check('records hold reasons, never ID values', records.every((r) => r.reason && !('value' in r)) && records.find((r) => r.field === 'serviceCode').note === 'plan will send the code');
+    check('audit summary is readable', /Medicaid ID missing \(pending from the payer\)/.test(acknowledgmentSummary(records)));
+
+    // Saved on approval; shown as missing until intake; noted on the care plan
+    const hosp = await ingestDocument({ organizationId: ORG, buffer: Buffer.concat([sample('hospital-discharge-incomplete.pdf'), Buffer.from('\n%ack1\n')]), source: 'upload' });
+    await processDocument(ORG, hosp.id);
+    const hd = await db.getIncomingDocument(ORG, hosp.id);
+    const hf = Object.fromEntries(Object.entries(hd.extraction.fields).map(([k, x]) => [k, x.value]));
+    const rid = await db.approveIncomingDocument(ORG, hosp.id, { fields: hf, reviewer: { name: 'QA' }, documentType: 'referral', idAcknowledgments: records });
+    const r = await db.getReferral(ORG, rid);
+    eq('acknowledgments are saved with the referral', r.fax.idAcknowledgments.map((x) => [x.field, x.reason]), [['medicaidId', 'pending_payer'], ['authNumber', 'not_on_fax'], ['serviceCode', 'other'], ['diagnosisCode', 'from_client']]);
+    eq('  ...and with the document', (await db.getIncomingDocument(ORG, hosp.id)).extraction.idAcknowledgments.length, 4);
+    eq('the referral shows its missing IDs', openMissingIds(r).map((m) => m.label), ['Medicaid ID', 'Authorization #', 'Procedure code', 'Diagnosis code']);
+    eq('  ...until intake is completed', openMissingIds({ ...r, status: 'completed' }).length, 0);
+    const cp = authorizationFromFax({ ...r, fax: { ...r.fax, serviceCode: 'S5125', authStart: '10/01/2026', authEnd: '12/31/2026' } }, 'c');
+    check('the care plan notes which IDs were missing', /IDs missing when the fax was approved: Medicaid ID \(pending from the payer\)/.test(cp.notes), cp.notes);
   }
 
   console.log('\n== Hardening (after review) ==');

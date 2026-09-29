@@ -34,7 +34,7 @@ echo "==> schema loaded into $DB_NAME"
 
 # 2. Copy the query layer and rewrite the '@/lib/db' alias, which plain
 #    node can't resolve (Next's tsconfig paths only apply inside Next).
-cp "$REPO/lib/queries.js" "$REPO/lib/db.js" "$REPO/lib/data.js" "$REPO/lib/state-compliance.js" "$REPO/lib/evv-mapping.js" "$REPO/lib/permissions.js" "$REPO/lib/client-identity.js" "$REPO/lib/passwords.js" "$REPO/lib/calendar.js" "$REPO/lib/geo.js" "$REPO/lib/evv-export.js" "$REPO/lib/pg-config.js" "$REPO/lib/fax-authorization.js" "$WORK/"
+cp "$REPO/lib/queries.js" "$REPO/lib/db.js" "$REPO/lib/data.js" "$REPO/lib/state-compliance.js" "$REPO/lib/evv-mapping.js" "$REPO/lib/permissions.js" "$REPO/lib/client-identity.js" "$REPO/lib/passwords.js" "$REPO/lib/calendar.js" "$REPO/lib/geo.js" "$REPO/lib/evv-export.js" "$REPO/lib/pg-config.js" "$REPO/lib/fax-authorization.js" "$REPO/lib/payroll-hours.js" "$WORK/"
 sed -i.bak   -e "s|from '@/lib/db'|from './db.js'|"   -e "s|from '@/lib/data'|from './data.js'|"   -e "s|from '@/lib/state-compliance'|from './state-compliance.js'|"   -e "s|from '@/lib/evv-mapping'|from './evv-mapping.js'|"   -e "s|from '@/lib/client-identity'|from './client-identity.js'|"   -e "s|from '@/lib/calendar'|from './calendar.js'|"   -e "s|from '@/lib/geo'|from './geo.js'|"   -e "s|from '@/lib/fax-authorization'|from './fax-authorization.js'|"   "$WORK/queries.js" "$WORK/evv-mapping.js" && rm -f "$WORK"/*.bak
 cp "$QA_DIR/qa.mjs" "$QA_DIR/qa-regression.mjs" "$QA_DIR/qa-roles.mjs" "$QA_DIR/qa-scoping.mjs" "$QA_DIR/qa-referral-create.mjs" "$QA_DIR/qa-multi-state.mjs" "$QA_DIR/qa-platform-dashboard.mjs" "$QA_DIR/qa-admin-dashboard.mjs" "$QA_DIR/qa-audit-log.mjs" "$QA_DIR/qa-client-evv-identity.mjs" "$QA_DIR/qa-access-control.mjs" "$QA_DIR/qa-visit-maintenance.mjs" "$QA_DIR/qa-visit-locations.mjs" "$QA_DIR/qa-evv-export.mjs" "$QA_DIR/qa-bill-hours.mjs" "$QA_DIR/qa-overlap.mjs" "$QA_DIR/qa-evv-sender.mjs" "$WORK/"
 # The EVV sender and its HHAeXchange adapter, plus the repo's mock
@@ -103,12 +103,13 @@ for extra in sign-in.js messaging.js inbound-sms.js docusign-connect.js format-t
     sed -i.bak -e "s|from '@/lib/comms'|from './comms/index.js'|" -e "s|from '@/lib/comms/\([a-z0-9-]*\)'|from './comms/\1.js'|" -e "s|from '@/lib/queries'|from './queries.js'|" -e "s|from '@/lib/passwords'|from './passwords.js'|" -e "s|from '@/lib/messaging'|from './messaging.js'|" "$WORK/$extra" && rm -f "$WORK/$extra.bak"
   fi
 done
-# 2026-09-26: fax intake — lib/docai/, storage, Google auth, the pipeline.
+# 2026-09-26: fax intake — lib/docai/, storage, the pipeline (Google removed
+# 2026-09-28), plus the startup check that refuses old Google settings.
 mkdir -p "$WORK/docai"
 cp "$REPO"/lib/docai/*.js "$WORK/docai/"
-cp "$REPO/lib/storage.js" "$REPO/lib/google-auth.js" "$REPO/lib/intake.js" "$WORK/"
-sed -i.bak -e "s|from '@/lib/docai/\([a-z0-9-]*\)'|from './\1.js'|" -e "s|from '@/lib/google-auth'|from '../google-auth.js'|" "$WORK"/docai/*.js && rm -f "$WORK"/docai/*.bak
-sed -i.bak -e "s|from '@/lib/google-auth'|from './google-auth.js'|" -e "s|from '@/lib/queries'|from './queries.js'|" -e "s|from '@/lib/storage'|from './storage.js'|" -e "s|from '@/lib/docai'|from './docai/index.js'|" "$WORK/storage.js" "$WORK/intake.js" && rm -f "$WORK"/*.bak
+cp "$REPO/lib/storage.js" "$REPO/lib/intake.js" "$REPO/lib/env-check.js" "$WORK/"
+sed -i.bak -e "s|from '@/lib/docai/\([a-z0-9-]*\)'|from './\1.js'|" "$WORK"/docai/*.js && rm -f "$WORK"/docai/*.bak
+sed -i.bak -e "s|from '@/lib/queries'|from './queries.js'|" -e "s|from '@/lib/storage'|from './storage.js'|" -e "s|from '@/lib/docai'|from './docai/index.js'|" "$WORK/storage.js" "$WORK/intake.js" && rm -f "$WORK"/*.bak
 mkdir -p "$WORK/sample-faxes" && cp "$REPO"/scripts/sample-faxes/*.pdf "$WORK/sample-faxes/"
 
 for suite in "$QA_DIR"/qa-2026-09-2[5-9]-*.mjs; do

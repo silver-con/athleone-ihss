@@ -21,35 +21,48 @@ coordinator  ──upload───▶ /inbox/upload ─────┼─▶ sto
 | Inbox list, upload, sample faxes, fax-line settings | `app/(dashboard)/inbox/page.js` |
 | Review screen (original on the left, fields on the right) | `app/(dashboard)/inbox/[id]/page.js`, `components/intake/ReviewForm.js` |
 | Store → read → save pipeline | `lib/intake.js` |
-| Reading engines | `lib/docai/` — `google.js` (Google Document AI), `demo.js` (typed PDFs, no account) |
+| Reading engines | `lib/docai/index.js` (engine list), `demo.js` (typed PDFs, no account) |
 | Turning engine output into fields | `lib/docai/parse.js`, field list in `lib/docai/fields.js` |
 | Checks (Medicaid ID, dates, hours, required fields) | `lib/docai/validate.js` |
 | Duplicate check (same Medicaid ID, name + DOB, or auth #) | `findIntakeDuplicates` in `lib/queries.js` |
 | Inbound fax webhook | `app/api/webhooks/fax/route.js` |
-| File storage (your disk, or Google Cloud Storage) | `lib/storage.js` |
+| File storage (local disk / mounted volume) | `lib/storage.js` |
 
 After approval, the referral's **Start Intake** form is pre-filled with the
 Medicaid ID, address, phone and authorization dates from the fax.
 
 ## Reading engines
 
-`DOCAI_PROVIDER` picks the engine:
+`DOCAI_PROVIDER` picks the engine. Today there is one:
 
-- **`demo`** (default): reads **typed** PDFs (like the three sample faxes)
-  on your own machine. Needs no account. It can't read a scanned fax. Use it
-  to try the workflow and in demos.
-- **`google`**: **Google Document AI**. Reads real faxes, scans and phone
-  photos.
+- **`demo`** (default): reads **typed** PDFs (like the three sample faxes,
+  or a PDF saved from an e-fax portal) on the server itself. No account, no
+  cost. It can't read a scanned fax or a photo; those show a clear message
+  and are entered by hand (**Enter by hand instead**).
 
-## Turning on real mode: Google Document AI
+**Google Document AI was removed on 2026-09-28**, together with the Google
+Cloud Storage driver and the Google Cloud deploy kit, ahead of the move to
+Azure. The planned replacement for reading scans is **Azure AI Document
+Intelligence** (it needs Microsoft's HIPAA BAA before real faxes go in). An
+old `DOCAI_PROVIDER=google` setting falls back to demo mode with a warning;
+an old `STORAGE_DRIVER=gcs` stops a production server from starting, so fax
+files are never quietly written to a disk that is wiped on restart. The
+removed code is in git history (before commit "Remove paid Google services").
 
-### 1. Create the reader (processor)
+### Adding a reading service
 
-In Google Cloud Console → **Document AI** → **Create processor**, choose
-**Custom Extractor**, region **US**, and name it `athleone-referral-extractor`.
+A new engine is one file in `lib/docai/` plus one line in `ENGINES` in
+`lib/docai/index.js`. It returns `{ engine, text, pageCount, entities }`:
+`text` with pages separated by a form feed (so the fax cover sheet is
+skipped), and `entities` as named fields `{ type, mentionText, confidence }`
+using the names below. Everything after that (label reading, Medicaid-ID
+checks, service lines, validation, review) is shared and needs no change.
 
-Add these fields to its schema, all **optional**, **once** per document (the CSV `docs/docai-schema-fields.csv` has them all, with descriptions). Use
-exactly these names; Athleone maps them automatically:
+### Field names
+
+Give the reading service's custom model these field names (all optional,
+once per document). `docs/docai-schema-fields.csv` has them all with
+descriptions:
 
 | Field name | Type | Description to give it (helps the AI) |
 |---|---|---|
@@ -96,7 +109,7 @@ exactly these names; Athleone maps them automatically:
 | `emergency_contact_phone` | Plain text | Emergency contact phone |
 | `emergency_contact_relationship` | Plain text | Emergency contact relationship to the member |
 
-All 42 fields are also in `docs/docai-schema-fields.csv`. `node scripts/docai-set-schema.mjs --apply` adds them all to the processor in one step (it uses your gcloud login). The first 13 fill
+All 42 fields are also in `docs/docai-schema-fields.csv`. The first 13 fill
 in the referral. The rest fill in the client's **care plan** automatically
 when intake is completed: service code and modifier, hours and units per
 week, dates, status, diagnosis code and approved tasks. The coordinator and
@@ -110,56 +123,11 @@ screen warns when:
 
 Language and the emergency contact prefill the intake form.
 
-Then use the processor's **test** screen on a few real faxes (the sample
-faxes work too), and **deploy/set a default version** if the console asks.
-Copy the **Processor ID** from the processor's details page.
+### HIPAA
 
-> Any processor type works. With a **Form Parser** or **Document OCR**
-> processor, Athleone falls back to reading printed labels ("Member Name:",
-> "DOB", "Authorization #"…). The Custom Extractor is more accurate on the
-> varied letter layouts health plans send.
-
-### 2. Settings
-
-**On your Mac, use your own Google login. No key file is needed.** Many
-Google organizations block service-account keys by default
-(`iam.disableServiceAccountKeyCreation`), and that's the safer setup anyway.
-Install the gcloud CLI (`brew install --cask google-cloud-sdk`), then:
-
-```bash
-gcloud auth application-default login          # opens the browser; sign in
-gcloud auth application-default set-quota-project your-project-id
-```
-
-Your Google account needs **Document AI API User** (a project Owner already
-has it). Then add these lines to `.env`:
-
-```bash
-DOCAI_PROVIDER=google
-GOOGLE_CLOUD_PROJECT=your-project-id
-DOCAI_LOCATION=us
-DOCAI_PROCESSOR_ID=abcdef1234567890
-```
-
-Athleone finds the login automatically
-(`~/.config/gcloud/application_default_credentials.json`).
-
-If you do have a service-account key, set
-`GOOGLE_APPLICATION_CREDENTIALS=/Users/najam/PrivateKeys/athleone-docai.json`
-instead, and keep the file outside the project folder.
-
-On Google Cloud Run you need neither: the service's own identity is used.
-See `deploy/DEPLOY-GOOGLE-CLOUD.md`.
-
-Restart `npm run dev`. The Fax Inbox banner changes to **Google Document
-AI**. Upload a real fax (a photo taken on your phone works too) and check the
-fields.
-
-### 3. HIPAA
-
-Before any real client document goes in, accept Google Cloud's **Business
-Associate Amendment** in the console. Document AI and Cloud Storage are
-covered services; keep everything in one US region.
+Before any real client document goes to a reading service, that vendor's
+HIPAA **Business Associate Agreement** must be in place, and processing
+must stay in a US region.
 
 ## Connecting a real fax line
 
@@ -189,8 +157,6 @@ inbox.
 
 - 20 MB per file; PDF, TIFF, PNG, JPEG, GIF or WEBP. The file type is checked
   from the file's contents, not its name.
-- Google's online processing handles up to about 15 pages per request, which
-  is plenty for referral faxes.
 - Files are stored per agency (`<agency>/incoming/<id>.pdf`), are only
   served to signed-in staff of that agency, and are never cached.
 - Every upload, approval and rejection is in the Audit Log.
@@ -199,8 +165,7 @@ inbox.
 - If reading is interrupted (e.g. the server restarted mid-read), the
   document shows **Read it again** / **Reject** after 10 minutes.
 - **"Try a sample fax"** is available in development. On a production server it
-  is off unless `ALLOW_SAMPLE_FAXES=true` (set it on a demo server only; the
-  Google Cloud setup script turns it on for a brand-new service).
+  is off unless `ALLOW_SAMPLE_FAXES=true` (set it on a demo server only).
 
 
 ## Document type, IDs and service lines (2026-09-26 update)
@@ -215,7 +180,7 @@ inbox.
 - **Medicaid ID vs plan member ID.** A plain "Member ID" / "Health Plan ID" goes
   in **Plan member ID**, never into Medicaid ID. When it's 9 digits, the
   reviewer can click *Use the plan member ID as the Medicaid ID* after
-  checking; this is audit-logged. A Google `medicaid_id` value that wasn't
+  checking; this is audit-logged. A reading service's `medicaid_id` value that wasn't
   printed next to the word "Medicaid" is moved to Plan member ID.
 - **Overall vs line status.** The overall status is kept separate from each
   service line's status.
@@ -224,10 +189,35 @@ inbox.
 - **Service lines.** Every line found is kept in the extraction and on the
   referral. Lines come from:
   - the single fields;
-  - repeated Google values;
+  - a field the reading service returns more than once;
   - a service-code table in the text;
-  - later, a `service_line` parent field in Google.
+  - later, a `service_line` parent field in the reading service.
 
   The reviewer picks a **primary** line, which fills the form. The care plan
   is built from the primary line, and the other lines are listed in its
   notes.
+
+## Missing or doubtful IDs (2026-09-26)
+
+A missing ID never slips through silently, whether or not the field is
+required.
+
+- **Key IDs:** Medicaid ID, authorization #, procedure code and diagnosis
+  code. When one is empty, the reviewer picks a reason before approving:
+  - not printed on the fax;
+  - pending from the payer;
+  - will get it from the client;
+  - unreadable (resend requested);
+  - other, with a note.
+- **Doubtful values:** any ID read with low confidence or failing its format
+  check (key IDs, plan member ID, case ID, provider NPI) is checked against
+  the fax, or given a reason. A value the reviewer typed or corrected counts
+  as checked.
+- **Required IDs:** an ID that's required for the document type and empty
+  stays **blocked**. It must be entered.
+- **What's recorded:**
+  - Reasons (never the ID values) are saved with the referral and in the
+    Audit Log (`fax_ids_acknowledged`).
+  - The referral shows **Missing IDs** in the list, on its page and on the
+    intake form until intake is completed.
+  - The care plan notes which IDs were missing.

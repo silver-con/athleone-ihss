@@ -70,12 +70,12 @@ export default async function InboxPage({ searchParams }) {
         }
       >
         <strong className="font-display">Reading engine:</strong> {engine.label}
-        {engine.provider === 'demo' && ` — it can read typed PDFs${sampleFaxesEnabled() ? ' such as the samples below' : ''}, but not scanned faxes. Connect Google Document AI to read real faxes (docs/FAX-INTAKE.md).`}
-        {engine.provider === 'google' && !engine.live && ` — missing ${engine.missing.join(', ')}.`}
+        {engine.provider === 'demo' && ` — it can read typed PDFs${sampleFaxesEnabled() ? ' such as the samples below' : ''}, but not scanned faxes. No document-reading service is connected yet, so enter scanned faxes by hand (docs/FAX-INTAKE.md).`}
+        {engine.unsupported && ` DOCAI_PROVIDER=${engine.requested} is no longer available, so demo mode is used.`}
       </div>
 
       <div className="grid md:grid-cols-[1fr_auto] gap-3 mt-4 items-start">
-        {canManage && <UploadDropzone engineLabel={engine.provider === 'google' ? 'Google Document AI' : 'demo mode (typed PDFs only)'} />}
+        {canManage && <UploadDropzone engineLabel={engine.provider === 'demo' ? 'demo mode (typed PDFs only)' : engine.label} />}
       </div>
       {canManage && sampleFaxesEnabled() && (
         <div className="mt-3">
