@@ -110,6 +110,9 @@ cp "$REPO"/lib/docai/*.js "$WORK/docai/"
 cp "$REPO/lib/storage.js" "$REPO/lib/intake.js" "$REPO/lib/env-check.js" "$WORK/"
 sed -i.bak -e "s|from '@/lib/docai/\([a-z0-9-]*\)'|from './\1.js'|" "$WORK"/docai/*.js && rm -f "$WORK"/docai/*.bak
 sed -i.bak -e "s|from '@/lib/queries'|from './queries.js'|" -e "s|from '@/lib/storage'|from './storage.js'|" -e "s|from '@/lib/docai'|from './docai/index.js'|" "$WORK/storage.js" "$WORK/intake.js" && rm -f "$WORK"/*.bak
+# 2026-09-28: payroll pay — the pure pay math and the shared report loader.
+cp "$REPO/lib/payroll-pay.js" "$REPO/lib/payroll-report.js" "$WORK/"
+sed -i.bak -e "s|from '@/lib/queries'|from './queries.js'|" -e "s|from '@/lib/payroll-hours'|from './payroll-hours.js'|" -e "s|from '@/lib/payroll-pay'|from './payroll-pay.js'|" -e "s|from '@/lib/calendar'|from './calendar.js'|" "$WORK/payroll-report.js" && rm -f "$WORK"/*.bak
 mkdir -p "$WORK/sample-faxes" && cp "$REPO"/scripts/sample-faxes/*.pdf "$WORK/sample-faxes/"
 
 for suite in "$QA_DIR"/qa-2026-09-2[5-9]-*.mjs; do

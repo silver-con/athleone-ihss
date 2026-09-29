@@ -352,3 +352,38 @@ Attendant Visit Log":
   No database change. Code: `lib/payroll-hours.js`, `getPayrollVisits` in
   `lib/queries.js`, `app/admin/payroll/`. QA: `qa-2026-09-28-payroll-hours.mjs`.
 
+---
+
+## What changed on 2026-09-28 (Payroll: pay, approval, lock)
+
+⚠️ **Database migration:** `db/migrations/2026-09-28-01-payroll-pay.sql` adds
+`caregiver_pay_rates` and `payroll_periods`. Run `npm run db:migrate` after
+pulling. To undo, drop those two tables; no other table changes.
+
+- **Pay rates** (`/admin/payroll/rates`, ADMIN only): each attendant's
+  default hourly rate, plus optional rates for particular clients. Rates
+  below the minimum wage ($7.25) are refused; every change is audit-logged
+  with the old and new rate. Athleone never guesses a rate: a visit with no
+  rate shows "No rate" and blocks approval.
+- **Gross pay** on `/admin/payroll` (ADMIN only; a LOCATION_ADMIN still sees
+  hours only): verified hours × rate, plus the **overtime premium**. Hours
+  past 40 in a Monday–Sunday workweek earn an extra half of that week's
+  regular rate, which is the week's straight-time pay ÷ its hours (the
+  weighted average when an attendant has more than one rate). The premium is
+  paid in the pay period in which the week ends.
+- **Approve and lock:** once the period has ended and nothing needs fixing,
+  an admin ticks "I checked…" and approves. The server rebuilds every number
+  itself, refuses if anything changed while the page was open, and stores a
+  frozen copy (the snapshot). Later edits to a visit or a rate are listed as
+  "changed since approval" and are not applied. **Reopen** (with a reason)
+  unlocks it; the old approval stays in the history.
+- **Payroll files:** *Visit detail* (with rate and pay for admins) and *Pay
+  summary per attendant* (hours worked, straight-time pay, overtime hours,
+  premium, gross). They come from the approved copy once approved, and every
+  download is audit-logged.
+- Tax withholding, deductions, direct deposit and filings stay with the
+  payroll provider (Gusto later). Code: `lib/payroll-pay.js`,
+  `lib/payroll-report.js`, `actions/payroll.js`,
+  `components/admin/PayrollForms.js`. QA: `qa-2026-09-28-payroll-pay.mjs`
+  (61 checks).
+

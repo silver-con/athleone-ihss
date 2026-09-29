@@ -149,7 +149,7 @@ const NAV_ITEMS = [
   },
   {
     href: '/admin/payroll',
-    label: 'Payroll Hours',
+    label: 'Payroll',
     permission: 'admin.payroll.view',
     match: (path) => path.startsWith('/admin/payroll'),
     icon: (

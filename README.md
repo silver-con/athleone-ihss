@@ -27,6 +27,7 @@ shared browser state.
 
 ### Added 2026-09-28
 
+- **Payroll pay** (`/admin/payroll`, `/admin/payroll/rates`): attendant pay rates, gross pay with the 40-hour overtime premium, approve-and-lock pay periods (later changes are flagged, not applied), and a pay summary CSV. ⚠️ Needs `npm run db:migrate`.
 - **Payroll Hours** (`/admin/payroll`): verified visit hours per attendant per pay period (twice a month by default), totals, variance, a 40-hour workweek check, fixes needed before payroll, and a CSV for the payroll company. See `docs/LEARN-ATHLEONE.md`.
 
 ### Added 2026-09-26
