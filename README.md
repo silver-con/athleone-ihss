@@ -25,6 +25,10 @@ shared browser state.
 - **Phone app?** [`mobile/README.md`](mobile/README.md): install from the website, or build the Android APK on GitHub.
 - **Something broken?** [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
 
+### Added 2026-09-28
+
+- **Payroll Hours** (`/admin/payroll`): verified visit hours per attendant per pay period (twice a month by default), totals, variance, a 40-hour workweek check, fixes needed before payroll, and a CSV for the payroll company. See `docs/LEARN-ATHLEONE.md`.
+
 ### Added 2026-09-26
 
 - **Fax Inbox** (`/inbox`): faxes arrive by webhook or upload, a reader fills in the referral (today the no-cost demo reader for typed PDFs; Google Document AI was removed 2026-09-28 ahead of the move to Azure), and a coordinator checks it side by side and approves. See [`docs/FAX-INTAKE.md`](docs/FAX-INTAKE.md).

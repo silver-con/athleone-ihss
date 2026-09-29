@@ -318,3 +318,37 @@ script (`scripts/docai-set-schema.mjs`) and the **Google Cloud deploy kit**
   "read by Google Document AI".
 - Still from Google, free and not a paid service: the Nunito/Karla web fonts
   and "open in Google Maps" links.
+
+---
+
+## What changed on 2026-09-28 (Payroll Hours)
+
+**Admin → Payroll Hours** (`/admin/payroll`) is the attendant visit log a
+payroll company works from, modelled on the agency's current "Service
+Attendant Visit Log":
+
+- **Pay period:** twice a month (1st–15th, 16th–end) by default, weekly, or a
+  custom range (up to 62 days). Arrows step between periods.
+- **One section per attendant:** date, visit ID, client, bill code and
+  modifier (from the care plan), scheduled time, clock times, scheduled /
+  verified / bill hours, and a total with the variance.
+- **Verified hours** are clock-in to clock-out, and only for visits that are
+  completed, EVV-verified and have no open exception. Anything else (open
+  exception, no clock-in, never clocked out, clock times that don't make
+  sense) is listed with a **Fix →** link to visit maintenance, so no one is
+  underpaid by accident. Missed visits are listed but need no fix.
+- **Bill hours** are what the visit bills for: scheduled time, or less after
+  a 110 B adjustment (marked *).
+- **40-hour check:** each Monday–Sunday workweek is totalled across the whole
+  week, even when a twice-a-month period splits it, and flagged in red past
+  40 hours.
+- **Download CSV:** one row per verified visit plus a total row per
+  attendant. It leaves out Medicaid IDs, diagnoses and addresses (minimum
+  necessary), guards against spreadsheet formulas, and every download is in
+  the Audit Log (`payroll_hours_exported`).
+- **Who sees it:** ADMIN (all attendants) and LOCATION_ADMIN (attendants in
+  their location), permission `admin.payroll.view`.
+- Pay rates, overtime pay and deductions stay in the payroll system for now.
+  No database change. Code: `lib/payroll-hours.js`, `getPayrollVisits` in
+  `lib/queries.js`, `app/admin/payroll/`. QA: `qa-2026-09-28-payroll-hours.mjs`.
+
