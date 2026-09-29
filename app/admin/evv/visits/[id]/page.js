@@ -16,6 +16,7 @@ import VisitMaintenanceForm from '@/components/admin/VisitMaintenanceForm';
 import VisitVmurForm from '@/components/admin/VisitVmurForm';
 import HomeFromVisitButton from '@/components/admin/HomeFromVisitButton';
 import { visitLocationLabel, formatDistance, mapLink } from '@/lib/geo';
+import { todayIso } from '@/lib/calendar';
 
 const CONTACT_LABEL = {
   none: 'No contact needed',
@@ -84,7 +85,10 @@ export default async function VisitMaintenancePage({ params }) {
       : [];
   const radius = organization?.homeRadiusFeet ?? 250;
   const hasHome = client?.homeLat !== null && client?.homeLat !== undefined;
-  const hasSomethingToFix = (visit.evv?.exception && !visit.resolved) || (visit.status === 'in-progress' && !hasOut);
+  // A past visit nobody clocked in to also needs fixing: record the times
+  // with reason code 210 (performVisitMaintenance already allows this).
+  const neverClocked = visit.status === 'scheduled' && !hasIn && visit.serviceDate < todayIso();
+  const hasSomethingToFix = (visit.evv?.exception && !visit.resolved) || (visit.status === 'in-progress' && !hasOut) || neverClocked;
 
   return (
     <div>
